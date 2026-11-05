@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using MahjongNight.Core;
 using UnityEngine;
 
@@ -10,9 +11,9 @@ namespace MahjongNight.Game
     }
 
     /// <summary>
-    /// Builds greybox tiles from primitives: an ivory body, a green back half, and a text
-    /// label on the face. The face is the tile's local -Z side, so an unrotated tile shows
-    /// its face to a camera looking along +Z.
+    /// Builds tiles from primitives: an ivory body, a green back half, and the traditional face
+    /// artwork from <see cref="TileAtlas"/> (text labels if the atlas is missing). The face is
+    /// the tile's local -Z side, so an unrotated tile shows its face to a camera looking along +Z.
     /// </summary>
     public sealed class TileFactory
     {
@@ -24,6 +25,7 @@ namespace MahjongNight.Game
         private readonly Material highlightMaterial;
         private readonly Material backMaterial;
         private readonly Font font;
+        private readonly Dictionary<(int, TileLook), Material> faceMaterials = new Dictionary<(int, TileLook), Material>();
 
         public TileFactory()
         {
@@ -67,11 +69,42 @@ namespace MahjongNight.Game
             back.GetComponent<Renderer>().sharedMaterial = backMaterial;
 
             if (showFace)
-                AddLabel(root.transform, tile);
+            {
+                if (TileAtlas.Texture != null)
+                    AddFace(root.transform, tile, look);
+                else
+                    AddLabel(root.transform, tile);
+            }
 
             var view = root.AddComponent<TileView>();
             view.Tile = tile;
             return view;
+        }
+
+        /// <summary>A quad on the tile's face showing its artwork.</summary>
+        private void AddFace(Transform tileRoot, Tile tile, TileLook look)
+        {
+            GameObject face = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            face.name = "Face";
+            Object.Destroy(face.GetComponent<Collider>());
+            face.transform.SetParent(tileRoot, false);
+            face.transform.localPosition = new Vector3(0f, 0f, -Depth * 0.5f - 0.0006f);
+            face.transform.localScale = new Vector3(Width * 0.97f, Height * 0.97f, 1f);
+            face.GetComponent<Renderer>().sharedMaterial = FaceMaterial(tile, look);
+        }
+
+        private Material FaceMaterial(Tile tile, TileLook look)
+        {
+            var key = (tile.KindIndex, look);
+            if (faceMaterials.TryGetValue(key, out Material cached))
+                return cached;
+            Material m = CreateMaterial(look == TileLook.Highlight ? new Color(1f, 0.88f, 0.5f) : Color.white);
+            m.mainTexture = TileAtlas.Texture;
+            Rect uv = TileAtlas.UvRect(tile);
+            m.mainTextureScale = new Vector2(uv.width, uv.height);
+            m.mainTextureOffset = new Vector2(uv.x, uv.y);
+            faceMaterials[key] = m;
+            return m;
         }
 
         private void AddLabel(Transform tileRoot, Tile tile)

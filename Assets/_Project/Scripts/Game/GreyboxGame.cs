@@ -90,7 +90,7 @@ namespace MahjongNight.Game
         private int hoveredAvatar = -1;
         private readonly List<Rect> uiRects = new List<Rect>();
         private float stylesForHeight;
-        private GUIStyle boxStyle, textStyle, titleStyle, centerStyle, logStyle, buttonStyle, pickerStyle;
+        private GUIStyle boxStyle, textStyle, titleStyle, centerStyle, logStyle, buttonStyle, pickerStyle, captionStyle;
         private bool showFullLog;
         private Tile? pickedHandTile;     // pocket strip selections (before pressing Swap)
         private int pickedPocketIndex = -1;
@@ -854,6 +854,7 @@ namespace MahjongNight.Game
             logStyle = new GUIStyle(textStyle) { fontSize = Mathf.RoundToInt(size * 0.85f) };
             logStyle.normal.textColor = new Color(0.75f, 0.75f, 0.75f);
             buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = size, richText = true, padding = new RectOffset(12, 12, 6, 6) };
+            captionStyle = new GUIStyle(logStyle) { alignment = TextAnchor.MiddleCenter };
             pickerStyle = new GUIStyle(GUI.skin.button)
             {
                 fontSize = Mathf.RoundToInt(size * 0.8f),
@@ -989,7 +990,7 @@ namespace MahjongNight.Game
             bool down = headLook.LookingDown;
             float now = Time.time;
             float stepSeconds = StepSeconds(HumanSeat);
-            float buttonH = Unit * 2.6f;
+            float buttonH = Unit * 3.6f;
             bool wasEnabled = GUI.enabled;
 
             if (c != null && c.InProgress)
@@ -1031,12 +1032,12 @@ namespace MahjongNight.Game
 
             // Row 1: hand tiles → pocket
             GUI.Label(new Rect(x0, y + buttonH / 2f - LineHeight / 2f, Unit * 7, LineHeight), "Hand → pocket:", textStyle);
-            float bw = Mathf.Min(Unit * 5.2f, (iw - Unit * 7) / Mathf.Max(1, handTiles.Count) - 4f);
+            float bw = Mathf.Min(Unit * 3f, (iw - Unit * 7) / Mathf.Max(1, handTiles.Count) - 4f);
             float x = x0 + Unit * 7;
             foreach (Tile t in handTiles)
             {
                 GUI.backgroundColor = pickedHandTile == t ? new Color(1f, 0.85f, 0.3f) : oldBackground;
-                if (GUI.Button(new Rect(x, y, bw, buttonH), PickerLabel(t), pickerStyle))
+                if (TileButton(new Rect(x, y, bw, buttonH), t))
                     pickedHandTile = t;
                 x += bw + 4;
             }
@@ -1048,7 +1049,7 @@ namespace MahjongNight.Game
             for (int i = 0; i < pocket.Count; i++)
             {
                 GUI.backgroundColor = pickedPocketIndex == i ? new Color(1f, 0.85f, 0.3f) : oldBackground;
-                if (GUI.Button(new Rect(x, y, bw, buttonH), PickerLabel(pocket[i]), pickerStyle))
+                if (TileButton(new Rect(x, y, bw, buttonH), pocket[i]))
                     pickedPocketIndex = i;
                 x += bw + 4;
             }
@@ -1076,6 +1077,32 @@ namespace MahjongNight.Game
             GUI.Label(new Rect(x0, y, iw, LineHeight),
                 $"Choosing is safe; the swap itself takes {stepSeconds * 3f:0.0}s and can be seen.  Caught = pay {matchRules.CheatPenalty} faan to everyone.  " +
                 "Tip: cheat while a bot is busy with its own turn.", logStyle);
+        }
+
+        /// <summary>A button showing the tile's traditional face (text if the atlas is missing).</summary>
+        private bool TileButton(Rect r, Tile t, string caption = null)
+        {
+            bool clicked = GUI.Button(r, GUIContent.none, pickerStyle);
+            Texture2D atlas = TileAtlas.Texture;
+            if (atlas == null)
+            {
+                GUI.Label(r, PickerLabel(t) + (caption != null ? "\n" + caption : ""), centerStyle);
+                return clicked;
+            }
+            const float pad = 3f;
+            float captionH = caption != null ? LineHeight * 0.85f : 0f;
+            float h = r.height - pad * 2 - captionH;
+            float w = h * 0.75f;
+            if (w > r.width - pad * 2)
+            {
+                w = r.width - pad * 2;
+                h = w / 0.75f;
+            }
+            var image = new Rect(r.center.x - w / 2f, r.y + pad, w, h);
+            GUI.DrawTextureWithTexCoords(image, atlas, TileAtlas.UvRect(t));
+            if (caption != null)
+                GUI.Label(new Rect(r.x, image.yMax, r.width, r.yMax - image.yMax), caption, captionStyle);
+            return clicked;
         }
 
         private static string PickerLabel(Tile t) =>
@@ -1153,15 +1180,16 @@ namespace MahjongNight.Game
             var gone = new HashSet<Tile>(Hand.Events.OfType<DrawFailedEvent>()
                 .Where(f => f.Seat == HumanSeat).Select(f => f.Tile));
 
-            float cell = Unit * 3.1f;
+            float cell = Unit * 3.2f;      // width
+            float cellH = Unit * 5.2f;     // tile picture + caption
             const float gap = 5f;
             float gridW = 9 * cell + 8 * gap;
             string title = $"Choose your draw   ({SecondsLeft()}s)";
             const string sub = "Pick a tile you think is still in the wall. If none are left, you lose your turn.";
             const string legend = "<color=#8f8>Green</color> = wins your hand   ·   Grey = all 4 accounted for (or already came up empty)";
             float w = Mathf.Max(gridW, TextWidth(textStyle, sub)) + Pad * 2;
-            float h = Pad * 2 + LineHeight * 1.2f + LineHeight * 2 + 4 * (cell + gap) + 4;
-            Rect r = Panel(new Rect((Screen.width - w) / 2f, Screen.height * 0.1f, w, h));
+            float h = Pad * 2 + LineHeight * 1.2f + LineHeight * 2 + 4 * (cellH + gap) + 4;
+            Rect r = Panel(new Rect((Screen.width - w) / 2f, Mathf.Max(Pad, Screen.height * 0.06f), w, h));
 
             float x0 = r.x + (r.width - gridW) / 2f;
             float y = r.y + Pad;
@@ -1176,16 +1204,16 @@ namespace MahjongNight.Game
                 Tile t = Tile.FromKindIndex(k);
                 int row = k < 27 ? k / 9 : 3;
                 int col = k < 27 ? k % 9 : k - 27;
-                var b = new Rect(x0 + col * (cell + gap), y + row * (cell + gap), cell, cell);
+                var b = new Rect(x0 + col * (cell + gap), y + row * (cellH + gap), cell, cellH);
 
                 FaanResult win = FaanCalculator.Calculate(Hand.PreviewDraw(HumanSeat, t), rules);
                 bool wins = win != null && win.Total >= rules.MinFaan;
                 bool hopeless = seen[k] >= TileSet.CopiesPerPlayableKind || gone.Contains(t);
 
                 GUI.backgroundColor = wins ? new Color(0.35f, 1f, 0.35f) : hopeless ? new Color(0.45f, 0.45f, 0.45f) : oldBackground;
-                string label = PickerLabel(t) + "\n" +
-                    (gone.Contains(t) ? "none left" : $"seen {seen[k]}/4") + (wins ? $"\n<color=#ff0>WIN {win.Total}</color>" : "");
-                if (GUI.Button(b, label, pickerStyle))
+                string caption = wins ? $"<color=#ff0>WIN {win.Total}</color>"
+                    : gone.Contains(t) ? "none left" : $"seen {seen[k]}/4";
+                if (TileButton(b, t, caption))
                 {
                     GUI.backgroundColor = oldBackground;
                     Apply(PlayerAction.Draw(HumanSeat, t));
@@ -1193,7 +1221,7 @@ namespace MahjongNight.Game
                 }
             }
             GUI.backgroundColor = oldBackground;
-            GUI.Label(new Rect(r.x + Pad, y + 4 * (cell + gap), r.width - Pad * 2, LineHeight), legend, textStyle);
+            GUI.Label(new Rect(r.x + Pad, y + 4 * (cellH + gap), r.width - Pad * 2, LineHeight), legend, textStyle);
         }
 
         /// <summary>Bright text colours that read on the dark default buttons.</summary>

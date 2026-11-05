@@ -34,3 +34,7 @@
 *.otf   filter=lfs diff=lfs merge=lfs -text
 *.dll   filter=lfs diff=lfs merge=lfs -text
 *.bundle filter=lfs diff=lfs merge=lfs -text
+
+# Generated tile-face atlas (Tools/generate_tile_faces.py): plain git, not LFS, so a fresh
+# clone works even without git-lfs installed.
+Assets/_Project/Resources/TileFaces.png -filter -diff -merge -text
