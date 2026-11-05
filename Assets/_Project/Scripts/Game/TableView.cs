@@ -29,7 +29,6 @@ namespace MahjongNight.Game
 
         private readonly TileFactory factory;
         private readonly Transform tilesRoot;
-        private readonly TextMesh wallLabel;
         private readonly List<TileView> humanHand = new List<TileView>();
 
         public TableView(Transform parent, TileFactory factory)
@@ -52,7 +51,6 @@ namespace MahjongNight.Game
             tilesRoot = new GameObject("Tiles").transform;
             tilesRoot.SetParent(parent, false);
 
-            wallLabel = CreateFlatText(parent, "WallLabel", Vector3.up * 0.001f, 0.012f);
         }
 
         /// <summary>The human's clickable hand tiles from the last rebuild.</summary>
@@ -197,7 +195,6 @@ namespace MahjongNight.Game
                     thickness / 2f + level * thickness, -WallDistance);
                 Place(default, false, frame, local, faceDown, TileLook.Normal, WallScale);
             }
-            wallLabel.text = remaining.ToString();
         }
 
         // ------------------------------------------------------------------ helpers
@@ -210,25 +207,6 @@ namespace MahjongNight.Game
             view.transform.rotation = frame * localRot;
             view.RestPosition = view.transform.position;
             return view;
-        }
-
-        /// <summary>Flat text lying on the table, readable from the human's seat.</summary>
-        private static TextMesh CreateFlatText(Transform parent, string name, Vector3 position, float size)
-        {
-            var go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            go.transform.position = position;
-            go.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            var text = go.AddComponent<TextMesh>();
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.font = font;
-            text.fontSize = 64;
-            text.characterSize = size;
-            text.anchor = TextAnchor.MiddleCenter;
-            text.alignment = TextAlignment.Center;
-            text.color = new Color(0.9f, 0.9f, 0.9f);
-            go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
-            return text;
         }
     }
 }
