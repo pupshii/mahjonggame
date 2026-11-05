@@ -1,45 +1,44 @@
 # Mahjong Night (working title)
 
-3D online party game built on Hong Kong mahjong — Unreal Engine 5, C++ + Blueprints.
+3D online party game built on Hong Kong mahjong — **Unity 6**, C#.
 Design and roadmap: [OUTLINE.md](OUTLINE.md).
 
 ## Requirements
-- **Unreal Engine 5.8** (Epic Games Launcher). Another 5.x works too: right-click
-  `MahjongNight.uproject` → *Switch Unreal Engine version…*
-- **Windows:** Visual Studio 2022 with the *Game development with C++* workload
-  (or JetBrains Rider). **macOS:** the Xcode version Epic lists for your engine version.
+- **Unity Hub** + a **Unity 6** editor (latest LTS recommended).
 - **Git LFS** — run `git lfs install` once before cloning.
+- An IDE: JetBrains Rider or Visual Studio Code (with the Unity extension).
 
 ## First-time setup
 ```sh
 git lfs install
 git clone https://github.com/pupshii/mahjonggame.git
-cd mahjonggame
 ```
-1. Right-click `MahjongNight.uproject` → **Generate Visual Studio project files**.
-2. Open `MahjongNight.sln`, set configuration to **Development Editor**, and build
-   (or just double-click the `.uproject` and let Unreal compile the modules).
-3. The editor opens with an empty level — the parlour map arrives in M3.
+1. Unity Hub → **Add → Add project from disk** → select the `mahjonggame` folder.
+2. When asked, pick your Unity 6 editor version. Unity generates `ProjectSettings/`,
+   `Packages/` and `.meta` files on first open.
+3. **Commit those generated files** (`ProjectSettings/`, `Packages/manifest.json`,
+   `Packages/packages-lock.json`, and every `.meta` file) so everyone shares the
+   same settings and asset IDs. Never commit `Library/`.
+4. Check **Edit → Project Settings → Editor**: *Asset Serialization* = **Force Text**
+   (the default) so scenes and prefabs can be merged.
 
 ## Running tests
-In the editor: **Tools → Session Frontend → Automation**, filter `MahjongCore`, run.
-
-Command line (Windows):
-```sh
-"<UE>/Engine/Binaries/Win64/UnrealEditor-Cmd.exe" "%CD%/MahjongNight.uproject" ^
-  -ExecCmds="Automation RunTests MahjongCore; Quit" -unattended -nopause -nullrhi -log
-```
+**Window → General → Test Runner → EditMode → Run All.**
+If the Test Runner window is missing, install **Test Framework** from
+Window → Package Manager → Unity Registry.
 
 ## Code layout
-| Path | What |
-|---|---|
-| `Source/MahjongCore/` | Pure C++ rules (depends on `Core` only): tiles, wall, turns, scoring, party rules |
-| `Source/MahjongCore/Private/Tests/` | Automation tests for the rules |
-| `Source/MahjongNight/` | Game module: GameMode, GameState, pawns, table, networking |
-| `Content/` | Blueprints, meshes, materials, audio (Git LFS) |
-| `Config/` | Engine and project settings |
+| Path | Assembly | What |
+|---|---|---|
+| `Assets/_Project/Scripts/Core/` | `MahjongCore` | Pure C# rules (no UnityEngine): tiles, wall, turns, scoring, party rules |
+| `Assets/_Project/Tests/EditMode/` | `MahjongCore.Tests` | NUnit tests for the rules |
+
+More assemblies (Net, Table, Characters, UI) arrive with their milestones — see OUTLINE.md §4.
 
 ## Conventions
-- Rules never go in `MahjongNight` or Blueprints — add them to `MahjongCore` with tests.
-- `.uasset`/`.umap` files are binary and **lockable**: lock before editing shared
-  assets (`git lfs lock Content/...`) to avoid conflicts that can't be merged.
+- Rules live only in `MahjongCore` (its asmdef has *No Engine References* on), with tests.
+  Gameplay MonoBehaviours call into it; they never re-implement rules.
+- Core code targets **C# 9** (Unity's language version): no file-scoped namespaces,
+  global usings, or record structs.
+- Only one person edits a given scene or prefab at a time — say so in chat before
+  you start. Prefer small prefabs over big shared scenes.

@@ -135,55 +135,54 @@ a pure one suit is a gamble that can wipe the table.
 ## 4. Tech Plan
 
 ### 4.1 Stack
+Unity is what most of the genre ships on (Lethal Company, R.E.P.O., Content Warning,
+Peak, Phasmophobia…): fast C# iteration, cheap Steam multiplayer, light builds.
+
 | Area | Choice | Notes |
 |---|---|---|
-| Engine | **Unreal Engine 5 (C++ + Blueprints)** | Game rules in C++; feel, animation, and UI wiring in Blueprints |
-| Netcode | Unreal replication, **listen server** | One player hosts; built into the engine, no extra library |
-| Lobbies / invites | Online Subsystem **Steam** + Steam Sockets | Steam friend invites, Steam relay = no port forwarding |
-| Voice chat | Built-in Unreal VOIP over OSS Steam | Everyone is at one table, so no proximity voice needed. Vivox / EOS Voice as fallback |
-| Physics / ragdoll | Chaos physics + Physics Assets | Physical tiles, chair tip-overs, pepper-KO ragdolls |
-| UI | UMG + Common UI | Claim buttons, hints, menus; gamepad-friendly |
-| Input | Enhanced Input | Mouse/keyboard + controller |
-| Audio | MetaSounds | Tile clacks, heartbeat, layered voice lines |
-| Version control | Git + **Git LFS** (for `.uasset` / `.umap`) | Switch to Perforce if the team grows |
+| Engine | **Unity 6 (LTS), C#** | URP render pipeline for the low-poly look |
+| Netcode | **Netcode for GameObjects (NGO)** | Host-authoritative: one player hosts. FishNet is a solid alternative |
+| Lobbies / invites | Steamworks via **Facepunch.Steamworks** + Facepunch transport for NGO | Steam friend invites, Steam relay = no port forwarding |
+| Voice chat | **Dissonance** (paid asset) or **Vivox** (free tier) | Everyone is at one table, so no proximity voice needed |
+| Physics / ragdoll | Unity physics (PhysX) | Physical tiles, chair tip-overs, pepper-KO ragdolls |
+| Input | Input System package | Mouse/keyboard + controller |
+| UI | uGUI or UI Toolkit | Claim buttons, hints, menus |
+| Tests | Unity Test Framework (NUnit) | EditMode tests for all rules |
+| Version control | Git + **Git LFS**, Force Text serialization, UnityYAMLMerge | |
 
 ### 4.2 Architecture
-- **`MahjongCore` C++ module** — plain C++ (no `UObject`s, no networking): tiles, wall,
-  turns, claims, win detection, faan, party rules. Deterministic with seeded RNG,
-  covered by Unreal Automation tests. Same "pure engine" idea as before, so rules
-  can be tested without launching the game.
-- **Server-authoritative gameplay framework:**
-  | Unreal class | Lives on | Responsibility |
+- **`MahjongCore` assembly** — pure C# with *No Engine References*: tiles, wall,
+  turns, claims, win detection, faan, party rules. Deterministic with a seeded RNG,
+  fully covered by EditMode tests, compiles and tests outside Unity too.
+- **Host-authoritative networking (NGO):**
+  | Component | Runs on | Responsibility |
   |---|---|---|
-  | `AMahjongGameMode` | Server only | Owns the `MahjongCore` match, runs turns, timers, roulette |
-  | `AMahjongGameState` | Replicated to all | Public info: discards, exposed melds, whose turn, steamer, lives |
-  | `AMahjongPlayerState` | Replicated | Seat, character, lives; **concealed hand replicated `COND_OwnerOnly`** |
-  | `AMahjongPlayerController` | Owning client | Sends intents via Server RPCs (`ServerDiscard`, `ServerClaim`, `ServerAccuse`, `ServerCheat`) |
-  | `AMahjongSeatPawn` | Replicated | First-person camera; head look direction replicated (needed for cheat detection) |
-  | `AMahjongTable` | Replicated | 3D tile actors, steamer, table props |
-- **Hidden information:** other players' hands and the wall never leave the server,
+  | `MatchHost` (NetworkBehaviour) | Host only | Owns the `MahjongCore` match; runs turns, timers, roulette |
+  | `TableState` (NetworkBehaviour) | Synced to all | Public info via NetworkVariables: discards, exposed melds, turn, steamer, lives |
+  | `PlayerSeat` (NetworkBehaviour) | Synced | Seat, character, lives; **concealed hand sent only to its owner** via targeted RPC |
+  | `PlayerSeat` RPCs | Owner → host | Intents: `DiscardRpc`, `ClaimRpc`, `CheatRpc`, `AccuseRpc` — host validates |
+  | `SeatLook` (NetworkBehaviour) | Owner → all | First-person camera; head direction synced (needed for cheat detection) |
+  | `TableView` (MonoBehaviour) | Every client | Spawns 3D tiles, steamer, plays animations from events |
+- **Hidden information:** other players' hands and the wall never leave the host,
   so a modded client can't see them.
-- **Presentation reacts to events:** core fires events (`OnTileDiscarded`,
-  `OnPung`, `OnRouletteResult`…) → Blueprints play animations and sounds. Rules
-  never wait on animations.
+- **Presentation reacts to events:** the core raises events (`TileDiscarded`,
+  `Pung`, `RouletteResult`…) → views play animations and sound. Rules never wait on animation.
 
 ### 4.3 Project layout
 ```
-MahjongNight.uproject
-Source/
-  MahjongCore/          Pure C++ rules: Tiles, Wall, Hand, Actions, MatchState, RuleSet,
-                        Scoring (Decompose, Faan, Payout), Party (Lives, Roulette, Cheats)
-    Tests/              Automation tests (MahjongCore.*)
-  MahjongNight/         Game module: GameMode, GameState, PlayerState, Controller,
-                        SeatPawn, Table, Bots, Steam session/lobby code
-Content/
-  Core/                 Blueprint subclasses, data assets (RuleSet presets, faan table)
-  Characters/           Meshes, anim blueprints, voice lines, physics assets
-  Environment/          Parlour map, props, lighting
-  Tiles/                Tile mesh, material instances per tile face
-  UI/                   UMG / Common UI widgets
-  Audio/                MetaSounds, SFX
-Config/                 DefaultEngine.ini (Steam OSS, net settings), DefaultGame.ini
+Assets/_Project/
+  Scripts/
+    Core/          MahjongCore.asmdef — pure C# rules (Tiles, Wall, Hand, Actions,
+                   MatchState, RuleSet, Scoring, Party)
+    Bots/          Bot players (fill empty seats, practice mode)
+    Net/           NGO + Steam lobby, MatchHost, TableState, PlayerSeat
+    Table/         3D table, tile views, seat cameras, look sync
+    Characters/    Animation controllers, voice lines, ragdolls
+    UI/            Claim buttons, hints, menus, settings
+  Tests/EditMode/  MahjongCore.Tests.asmdef — NUnit tests
+  Art/  Audio/  Prefabs/  Scenes/
+Packages/          manifest.json (committed)
+ProjectSettings/   (committed)
 ```
 
 ---
@@ -203,11 +202,11 @@ Config/                 DefaultEngine.ini (Steam OSS, net settings), DefaultGame
 
 | # | Milestone | Done when |
 |---|---|---|
-| M0 | Setup | UE5 C++ project, Git LFS + Unreal `.gitignore`, `MahjongCore` module, automation tests green |
+| M0 | Setup | Unity 6 project, Git LFS + Unity `.gitignore`, `MahjongCore` assembly, EditMode tests green |
 | M1 | Engine core | Tiles, wall, dealing, flowers, turn loop, claims — headless tests pass |
 | M2 | Win & faan | Win detection + faan calculator with tests for every pattern |
 | M3 | Greybox table | Single player vs 3 bots in a 3D greybox room, playable start to finish |
-| M4 | Multiplayer | Steam lobby, 2–4 players online, listen server, bots fill seats |
+| M4 | Multiplayer | Steam lobby, 2–4 players online, host-authoritative NGO, bots fill seats |
 | M5 | Party layer | Lives, Dumpling Roulette, eliminations, ghost spectators |
 | M6 | Cheat & accuse | Cheats, look-direction sync, accusation flow |
 | M7 | Characters & voice | 4 characters, animations, voice lines, voice chat, emotes |
@@ -220,10 +219,10 @@ bots and placeholder cubes, art won't save it.
 ---
 
 ## 7. Testing
-- Automation tests for every faan pattern and tricky decompositions.
+- EditMode (NUnit) tests for every faan pattern and tricky decompositions.
 - Invariant checks: 144 tiles always accounted for; no duplicates across zones.
 - Bot-vs-bot soak tests: thousands of simulated hands to catch illegal states.
-- Network tests: Play-In-Editor with multiple clients; `Net PktLag` / `PktLoss` to simulate bad connections; disconnect/rejoin.
+- Network tests: Multiplayer Play Mode (several players in one editor); Network Simulator for lag/packet loss; disconnect/rejoin.
 - Weekly friend playtests from M5 onward — measure laughs, not just bugs.
 
 ---
