@@ -89,7 +89,7 @@ namespace MahjongNight.Core.Tests
             SeatState dealer = hand.Seats[0];
             Assert.That(dealer.Bonus, Is.EqualTo(new[] { Tile.Flower(1) }));
             Assert.That(dealer.Concealed, Has.Count.EqualTo(14));
-            Assert.That(dealer.Concealed, Does.Contain(Tile.DragonTile(Dragon.White)));
+            Assert.That(dealer.Concealed, Has.Member(Tile.DragonTile(Dragon.White)));
             Assert.That(dealer.Concealed.Any(t => t.IsBonus), Is.False);
 
             Assert.That(hand.Events[0], Is.TypeOf<BonusTileRevealedEvent>());
@@ -225,8 +225,8 @@ namespace MahjongNight.Core.Tests
                 validator: validator);
             hand.Apply(PlayerAction.Discard(0, Tile.Bamboo(5)));
 
-            Assert.That(hand.GetLegalActions(3), Does.Contain(PlayerAction.Win(3)));
-            Assert.That(hand.GetLegalActions(2), Does.Not.Contain(PlayerAction.Win(2)));
+            Assert.That(hand.GetLegalActions(3), Has.Member(PlayerAction.Win(3)));
+            Assert.That(hand.GetLegalActions(2), Has.No.Member(PlayerAction.Win(2)));
             hand.Apply(PlayerAction.Chow(1, Tile.Bamboo(3)));
             hand.Apply(PlayerAction.Pung(2));
             hand.Apply(PlayerAction.Win(3));
@@ -294,7 +294,7 @@ namespace MahjongNight.Core.Tests
                     s3: "1D 4D 7D 1B 4B 7B 1C 4C 7C N N GD WD"),
                 backDraws: "9C");
             Tile red = Tile.DragonTile(Dragon.Red);
-            Assert.That(hand.GetLegalActions(0), Does.Contain(PlayerAction.ConcealedKong(0, red)));
+            Assert.That(hand.GetLegalActions(0), Has.Member(PlayerAction.ConcealedKong(0, red)));
             hand.Apply(PlayerAction.ConcealedKong(0, red));
 
             Meld kong = hand.Seats[0].Melds.Single();
@@ -313,7 +313,7 @@ namespace MahjongNight.Core.Tests
                     s2: "3D 6D 9D 3B 6B 9B 3C 6C 8C E S W WD",
                     s3: "1D 4D 7D 1B 4B 7B 1C 4C 7C N N GD WD"),
                 backDraws: "9C", validator: PredicateWinValidator.Holding("9C 9C 9C"));
-            Assert.That(hand.GetLegalActions(0), Does.Not.Contain(PlayerAction.SelfDrawnWin(0)));
+            Assert.That(hand.GetLegalActions(0), Has.No.Member(PlayerAction.SelfDrawnWin(0)));
             hand.Apply(PlayerAction.ConcealedKong(0, Tile.DragonTile(Dragon.Red)));
             hand.Apply(PlayerAction.SelfDrawnWin(0));
 
@@ -351,7 +351,7 @@ namespace MahjongNight.Core.Tests
         public void PromoteKong_WithoutRobber_BecomesKong()
         {
             HandState hand = PromoteKongSetup(null);
-            Assert.That(hand.GetLegalActions(2), Does.Contain(PlayerAction.PromoteKong(2, Tile.Bamboo(5))));
+            Assert.That(hand.GetLegalActions(2), Has.Member(PlayerAction.PromoteKong(2, Tile.Bamboo(5))));
             hand.Apply(PlayerAction.PromoteKong(2, Tile.Bamboo(5)));
 
             Meld kong = hand.Seats[2].Melds.Single();
