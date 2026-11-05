@@ -66,7 +66,8 @@ namespace MahjongNight.Game
             return Quaternion.Euler(0f, -90f * relative, 0f) * new Vector3(0f, 0.13f, HandZ);
         }
 
-        public void Rebuild(HandState hand, int humanSeat, bool revealBots)
+        /// <param name="hiddenTiles">Per seat, one tile currently "in transit" to a pocket (not drawn in the hand row).</param>
+        public void Rebuild(HandState hand, int humanSeat, bool revealBots, IReadOnlyDictionary<int, Tile> hiddenTiles = null)
         {
             for (int i = tilesRoot.childCount - 1; i >= 0; i--)
             {
@@ -84,7 +85,8 @@ namespace MahjongNight.Game
                 SeatState s = hand.Seats[seat];
                 bool isHuman = seat == humanSeat;
 
-                BuildConcealed(hand, s, frame, isHuman, isHuman || revealBots || ended);
+                Tile? hidden = hiddenTiles != null && hiddenTiles.TryGetValue(seat, out Tile h) ? h : (Tile?)null;
+                BuildConcealed(hand, s, frame, isHuman, isHuman || revealBots || ended, hidden);
                 BuildMeldsAndBonus(s, frame);
                 BuildDiscards(hand, s, frame);
             }
@@ -93,13 +95,16 @@ namespace MahjongNight.Game
 
         // ------------------------------------------------------------------ seats
 
-        private void BuildConcealed(HandState hand, SeatState s, Quaternion frame, bool isHuman, bool showFaces)
+        private void BuildConcealed(HandState hand, SeatState s, Quaternion frame, bool isHuman, bool showFaces, Tile? hidden)
         {
             List<Tile> tiles = s.Concealed.OrderBy(t => t).ToList();
+            if (hidden.HasValue)
+                tiles.Remove(hidden.Value);
 
             // Keep the human's freshly drawn tile apart on the right, like at a real table.
             Tile? drawn = null;
-            if (isHuman && hand.Phase == HandPhase.AwaitingAction && hand.CurrentSeat == s.Seat && hand.LastDrawnTile.HasValue)
+            if (isHuman && hand.Phase == HandPhase.AwaitingAction && hand.CurrentSeat == s.Seat && hand.LastDrawnTile.HasValue
+                && tiles.Contains(hand.LastDrawnTile.Value))
             {
                 drawn = hand.LastDrawnTile.Value;
                 tiles.Remove(drawn.Value);

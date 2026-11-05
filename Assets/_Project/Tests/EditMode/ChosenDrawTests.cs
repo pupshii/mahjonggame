@@ -16,6 +16,7 @@ namespace MahjongNight.Core.Tests
         {
             RuleSet r = RuleSet.Party();
             r.MinFaan = 0;
+            r.ChooseDraws = true;
             return r;
         }
 
@@ -202,7 +203,9 @@ namespace MahjongNight.Core.Tests
             for (ulong seed = 1; seed <= 150; seed++)
             {
                 var rng = new SeededRandom(seed);
-                HandState hand = HandState.Deal(RuleSet.Party(), (int)(seed % 4), Wind.East, seed);
+                RuleSet rules = RuleSet.Party();
+                rules.ChooseDraws = true;
+                HandState hand = HandState.Deal(rules, (int)(seed % 4), Wind.East, seed);
                 for (int step = 0; hand.Phase != HandPhase.Ended; step++)
                 {
                     Assert.That(step, Is.LessThan(20000), $"seed {seed}");

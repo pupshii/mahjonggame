@@ -1,0 +1,248 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace MahjongNight.Core
+{
+    public enum MatchPhase : byte
+    {
+        /// <summary>Between hands: players may buy upgrades; call <see cref="ScoreMatch.StartHand"/>.</summary>
+        BetweenHands,
+        /// <summary><see cref="ScoreMatch.Hand"/> is live; call <see cref="ScoreMatch.ResolveHand"/> when it ends.</summary>
+        PlayingHand,
+        MatchOver
+    }
+
+    /// <summary>A player's match-level state: score, upgrades, and secret pocket.</summary>
+    public sealed class MatchPlayer
+    {
+        private readonly int[] levels = new int[Upgrades.All.Length];
+        internal readonly List<Tile> pocket = new List<Tile>();
+
+        internal MatchPlayer(int seat, int score)
+        {
+            Seat = seat;
+            Score = score;
+        }
+
+        public int Seat { get; }
+        /// <summary>Faan balance: earned by winning, spent on upgrades, lost to penalties.</summary>
+        public int Score { get; internal set; }
+        /// <summary>Tiles from outside the game this player can swap in. Private to them (host-only).</summary>
+        public IReadOnlyList<Tile> Pocket => pocket;
+        public int CheatsCaught { get; internal set; }
+
+        public int Level(Upgrade u) => levels[(int)u];
+        internal void SetLevel(Upgrade u, int level) => levels[(int)u] = level;
+    }
+
+    /// <summary>
+    /// A scored match: a fixed number of hands, faan paid between players after each one, a
+    /// secret pocket of outside tiles per player for cheating, call-outs, and upgrades bought
+    /// with faan between hands. Pure rules; the host owns it. Who saw a cheat is decided by
+    /// the presentation layer, which then calls <see cref="CatchCheater"/> or
+    /// <see cref="FalseAccusation"/>.
+    /// </summary>
+    public sealed class ScoreMatch
+    {
+        private readonly SeededRandom rng;
+        private readonly MatchPlayer[] players = new MatchPlayer[HandState.SeatCount];
+        private readonly List<MatchEvent> events = new List<MatchEvent>();
+        private int dealerPasses;
+
+        public ScoreMatch(RuleSet rules, MatchRules matchRules, ulong seed)
+        {
+            Rules = rules ?? throw new ArgumentNullException(nameof(rules));
+            MatchRules = matchRules ?? throw new ArgumentNullException(nameof(matchRules));
+            rng = new SeededRandom(seed);
+            for (int s = 0; s < players.Length; s++)
+                players[s] = new MatchPlayer(s, matchRules.StartingScore);
+            Phase = MatchPhase.BetweenHands;
+        }
+
+        public RuleSet Rules { get; }
+        public MatchRules MatchRules { get; }
+        public MatchPhase Phase { get; private set; }
+        public HandState Hand { get; private set; }
+        public int HandNumber { get; private set; }
+        public int Dealer { get; private set; }
+        public Wind PrevailingWind => (Wind)(dealerPasses / HandState.SeatCount % 4 + 1);
+        public IReadOnlyList<MatchPlayer> Players => players;
+        public IReadOnlyList<MatchEvent> Events => events;
+        /// <summary>Highest score(s) once the match is over.</summary>
+        public IReadOnlyList<int> Winners { get; private set; } = new int[0];
+
+        // ------------------------------------------------------------------ hands
+
+        /// <summary>Deals the next hand and fills everyone's pocket with fresh outside tiles.</summary>
+        public HandState StartHand()
+        {
+            if (Phase != MatchPhase.BetweenHands)
+                throw new InvalidOperationException($"Can't start a hand during {Phase}.");
+            HandNumber++;
+            Hand = HandState.Deal(Rules, Dealer, PrevailingWind, rng.NextUInt64());
+            foreach (MatchPlayer p in players)
+            {
+                p.pocket.Clear();
+                int size = Upgrades.PocketSize(MatchRules.PocketSize, p.Level(Upgrade.DeepPockets));
+                for (int i = 0; i < size; i++)
+                    p.pocket.Add(Tile.FromKindIndex(rng.NextInt(TileSet.PlayableKindCount)));
+            }
+            Phase = MatchPhase.PlayingHand;
+            events.Add(new MatchHandStartedEvent(HandNumber, Dealer, PrevailingWind));
+            return Hand;
+        }
+
+        /// <summary>Pays out a hand that ended normally (win or draw game).</summary>
+        public void ResolveHand()
+        {
+            if (Phase != MatchPhase.PlayingHand || Hand.Phase != HandPhase.Ended)
+                throw new InvalidOperationException("No finished hand to resolve.");
+            if (Hand.Result.Outcome == HandOutcome.CheatCaught)
+                throw new InvalidOperationException("Caught cheats are settled by CatchCheater.");
+
+            HandResult result = Hand.Result;
+            if (result.Outcome == HandOutcome.Win)
+            {
+                for (int i = 0; i < result.Winners.Count; i++)
+                {
+                    int winner = result.Winners[i];
+                    FaanResult score = FaanCalculator.Calculate(result.WinContexts[i], Rules);
+                    int faan = score?.Total ?? 0;
+                    if (result.SelfDrawn)
+                    {
+                        for (int s = 0; s < players.Length; s++)
+                            if (s != winner)
+                                Pay(s, winner, faan, PaymentReason.SelfDrawnWin);
+                    }
+                    else
+                    {
+                        Pay(result.Discarder, winner, faan, PaymentReason.WinOnDiscard);
+                    }
+                }
+            }
+
+            bool dealerKeeps = result.Outcome == HandOutcome.ExhaustiveDraw || result.Winners.Contains(Dealer);
+            FinishHand(dealerKeeps);
+        }
+
+        // ------------------------------------------------------------------ cheating
+
+        /// <summary>
+        /// Completes a cheat: <paramref name="fromHand"/> goes into the pocket slot
+        /// <paramref name="pocketIndex"/>, and the tile that was there goes into the hand.
+        /// </summary>
+        public bool TryPocketSwap(int seat, Tile fromHand, int pocketIndex, out string error)
+        {
+            if (Phase != MatchPhase.PlayingHand)
+            {
+                error = "No hand in progress.";
+                return false;
+            }
+            List<Tile> pocket = players[seat].pocket;
+            if (pocketIndex < 0 || pocketIndex >= pocket.Count)
+            {
+                error = "No such pocket tile.";
+                return false;
+            }
+            if (!Hand.TryPocketSwap(seat, fromHand, pocket[pocketIndex], out error))
+                return false;
+            pocket[pocketIndex] = fromHand;
+            return true;
+        }
+
+        /// <summary>
+        /// <paramref name="caller"/> caught <paramref name="cheater"/> mid-cheat: the hand ends at
+        /// once and the cheater pays <see cref="MatchRules.CheatPenalty"/> to each other player.
+        /// </summary>
+        public void CatchCheater(int cheater, int caller)
+        {
+            if (Phase != MatchPhase.PlayingHand || Hand.Phase == HandPhase.Ended)
+                throw new InvalidOperationException("No live hand to stop.");
+            Hand.CatchCheater(cheater);
+            players[cheater].CheatsCaught++;
+            events.Add(new CheaterCaughtEvent(cheater, caller));
+            for (int s = 0; s < players.Length; s++)
+                if (s != cheater)
+                    Pay(cheater, s, MatchRules.CheatPenalty, PaymentReason.CheatPenalty);
+            FinishHand(dealerKeeps: cheater != Dealer);
+        }
+
+        /// <summary><paramref name="caller"/> called out <paramref name="accused"/>, who wasn't cheating.</summary>
+        public void FalseAccusation(int caller, int accused)
+        {
+            if (Phase != MatchPhase.PlayingHand)
+                throw new InvalidOperationException("No hand in progress.");
+            events.Add(new FalseAccusationEvent(caller, accused));
+            Pay(caller, accused, MatchRules.FalseAccusationFine, PaymentReason.FalseAccusation);
+        }
+
+        // ------------------------------------------------------------------ upgrades
+
+        public bool CanBuy(int seat, Upgrade upgrade, out int cost)
+        {
+            int next = players[seat].Level(upgrade) + 1;
+            cost = Upgrades.Cost(upgrade, next);
+            return Phase == MatchPhase.BetweenHands && next <= Upgrades.MaxLevel && players[seat].Score >= cost;
+        }
+
+        public bool TryBuy(int seat, Upgrade upgrade, out string error)
+        {
+            MatchPlayer p = players[seat];
+            if (Phase != MatchPhase.BetweenHands)
+            {
+                error = "Upgrades can only be bought between hands.";
+                return false;
+            }
+            int next = p.Level(upgrade) + 1;
+            if (next > Upgrades.MaxLevel)
+            {
+                error = $"{Upgrades.Name(upgrade)} is already maxed out.";
+                return false;
+            }
+            int cost = Upgrades.Cost(upgrade, next);
+            if (p.Score < cost)
+            {
+                error = $"{Upgrades.Name(upgrade)} {next} costs {cost} faan; you have {p.Score}.";
+                return false;
+            }
+            error = null;
+            p.Score -= cost;
+            p.SetLevel(upgrade, next);
+            events.Add(new UpgradeBoughtEvent(seat, upgrade, next, cost));
+            return true;
+        }
+
+        // ------------------------------------------------------------------ helpers
+
+        private void Pay(int from, int to, int amount, PaymentReason reason)
+        {
+            if (amount <= 0 || from == to)
+                return;
+            players[from].Score -= amount;
+            players[to].Score += amount;
+            events.Add(new PaymentEvent(from, to, amount, reason));
+        }
+
+        private void FinishHand(bool dealerKeeps)
+        {
+            if (!dealerKeeps)
+            {
+                Dealer = HandState.NextSeat(Dealer);
+                dealerPasses++;
+            }
+
+            if (HandNumber >= MatchRules.HandsPerMatch)
+            {
+                int best = players.Max(p => p.Score);
+                Winners = players.Where(p => p.Score == best).Select(p => p.Seat).ToList();
+                Phase = MatchPhase.MatchOver;
+                events.Add(new MatchOverEvent(Winners));
+            }
+            else
+            {
+                Phase = MatchPhase.BetweenHands;
+            }
+        }
+    }
+}

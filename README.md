@@ -22,21 +22,25 @@ git clone https://github.com/pupshii/mahjonggame.git
 4. Check **Edit → Project Settings → Editor**: *Asset Serialization* = **Force Text**
    (the default) so scenes and prefabs can be merged.
 
-## Playing the greybox (M3 + M5 party layer)
-1. Menu bar → **Mahjong Night → Create Greybox Scene** (first time only — creates
-   `Assets/_Project/Scenes/Greybox.unity`; commit it). Later: **Mahjong Night → Open Greybox Scene**.
-2. Press **Play**. You sit at the bottom against three bots.
-3. On your turn, first **pick the tile you want to draw** from the menu (party rule). If no copy
-   is left in the wall you get an "Invalid draw" popup and lose your turn. Then **click a tile in
-   your hand** to discard it (it lifts when hovered). Party and Classic both need **3 faan** to win.
-   Claim buttons (Win / Pung / Kong / Chow / Pass) appear top-right when you can act.
-4. **Dumpling Roulette:** after each hand the losers eat from the steamer in the middle
-   (discarder on a discard win, everyone else on a self-draw, two each for 5+ faan, non-ready
-   hands on a draw game). On your turn, click a dumpling. One is the ghost pepper — eat it and
-   you're out (your seat is taken over by a neutral house bot). Last player standing wins.
-5. Options on the **Greybox Game** object in the Inspector: party mode on/off, lives, shared or
-   personal steamers, Classic rules, bot/roulette speed, your time limit, reveal bot hands
-   (debug), fixed seed (replay the same match).
+## Playing the greybox
+1. Menu bar → **Mahjong Night → Create Greybox Scene** (first time only; commit the scene).
+   Later: **Mahjong Night → Open Greybox Scene**. Press **Play**.
+2. **Look around with the cursor:** the middle of the screen is calm; push to the left/right
+   edges to watch the players beside you, the top edge to look across, the **bottom edge to look
+   down** into your lap.
+3. **Your turn:** click a tile in your hand to discard it. Claim buttons appear above your hand.
+   3 faan minimum to win.
+4. **Cheat:** look down — a pocket strip appears. 1) pick a hand tile to slip into your pocket,
+   2) pick one of your 5 pocket tiles (outside the game), 3) slip it into your hand. Anyone
+   watching your hands during the motion can call you out: you pay 10 faan to each player and
+   the hand ends.
+5. **Catch cheaters:** if you see a bot reach under the table, press **SPACE** (calls out whoever
+   you're looking at) or click them. A wrong call costs you 3 faan.
+6. **Between hands:** winners collect faan (discarder pays, or everyone on a self-draw); spend
+   faan on upgrades (Sleight of Hand, Deep Pockets, Poker Face, Eagle Eye). Highest faan after
+   8 hands wins.
+7. Inspector options on **Greybox Game**: Classic rules, choose-your-draw, match length,
+   penalties, bot nerve / spot chance, pacing, reveal bot hands, fixed seed.
 
 ## Running tests
 **Window → General → Test Runner → EditMode → Run All.**
@@ -48,7 +52,7 @@ Window → Package Manager → Unity Registry.
 |---|---|---|
 | `Assets/_Project/Scripts/Core/` | `MahjongCore` | Pure C# rules (no UnityEngine): tiles, wall, turns, scoring, party rules |
 | `Assets/_Project/Scripts/Core/Bots/` | `MahjongCore` | Bot players (pure C#, tested) |
-| `Assets/_Project/Scripts/Core/Party/` | `MahjongCore` | Party match: penalties, steamer, knockouts |
+| `Assets/_Project/Scripts/Core/Match/` | `MahjongCore` | Scored match: faan payouts, pockets, cheats caught, upgrades |
 | `Assets/_Project/Scripts/Game/` | `MahjongNight.Game` | Unity side: table view, tiles, greybox game loop & UI |
 | `Assets/_Project/Scripts/Editor/` | `MahjongNight.Editor` | Editor menu items |
 | `Assets/_Project/Tests/EditMode/` | `MahjongCore.Tests` | NUnit tests for the rules |

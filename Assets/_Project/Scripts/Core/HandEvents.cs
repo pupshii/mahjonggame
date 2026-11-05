@@ -46,6 +46,23 @@ namespace MahjongNight.Core
         public override string ToString() => $"Seat{Seat} tries to draw {Tile} — none left, turn lost";
     }
 
+    /// <summary>
+    /// A player secretly swapped a tile from their hand with one from their pocket. Private:
+    /// only the cheater (and the host) knows; everyone else only sees the motion.
+    /// </summary>
+    public sealed class PocketSwapEvent : HandEvent
+    {
+        public PocketSwapEvent(int seat, Tile intoPocket, Tile outOfPocket) : base(seat)
+        {
+            IntoPocket = intoPocket;
+            OutOfPocket = outOfPocket;
+        }
+
+        public Tile IntoPocket { get; }
+        public Tile OutOfPocket { get; }
+        public override string ToString() => $"Seat{Seat} pockets {IntoPocket} and slips in {OutOfPocket}";
+    }
+
     /// <summary>A flower or season was set aside (public).</summary>
     public sealed class BonusTileRevealedEvent : HandEvent
     {

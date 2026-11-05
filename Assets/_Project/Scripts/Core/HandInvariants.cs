@@ -4,7 +4,7 @@ namespace MahjongNight.Core
 {
     /// <summary>
     /// Consistency checks for a <see cref="HandState"/>: every one of the 144 tiles is in
-    /// exactly one place and hand sizes are legal. Used by tests and bot soak runs; cheap
+    /// exactly one place (allowing for tiles swapped with pockets) and hand sizes are legal. Used by tests and bot soak runs; cheap
     /// enough to call after every action in development builds.
     /// </summary>
     public static class HandInvariants
@@ -49,13 +49,19 @@ namespace MahjongNight.Core
                     problems.Add($"Seat {s.Seat} hand size {size}, expected {expected}.");
             }
 
+            // Pocket swaps keep the total but can shift kinds (e.g. a fifth copy).
+            var expectedCounts = new int[TileSet.KindCount];
+            for (int k = 0; k < TileSet.KindCount; k++)
+                expectedCounts[k] = k < TileSet.PlayableKindCount ? TileSet.CopiesPerPlayableKind : 1;
+            foreach (Tile t in hand.StashedTiles) expectedCounts[t.KindIndex]--;
+            foreach (Tile t in hand.InjectedTiles) expectedCounts[t.KindIndex]++;
+
             if (total != TileSet.TotalTiles)
                 problems.Add($"Found {total} tiles, expected {TileSet.TotalTiles}.");
             for (int k = 0; k < TileSet.KindCount; k++)
             {
-                int expected = k < TileSet.PlayableKindCount ? TileSet.CopiesPerPlayableKind : 1;
-                if (counts[k] != expected)
-                    problems.Add($"Found {counts[k]} × {Tile.FromKindIndex(k)}, expected {expected}.");
+                if (counts[k] != expectedCounts[k])
+                    problems.Add($"Found {counts[k]} × {Tile.FromKindIndex(k)}, expected {expectedCounts[k]}.");
             }
             return problems;
         }
@@ -72,8 +78,8 @@ namespace MahjongNight.Core
                 case HandPhase.AwaitingDraw:
                     return 13;
                 case HandPhase.Ended:
-                    if (hand.Result.Outcome == HandOutcome.ExhaustiveDraw)
-                        return -1; // the wall may run out mid-turn
+                    if (hand.Result.Outcome != HandOutcome.Win)
+                        return -1; // the wall may run out mid-turn; a caught cheat stops mid-turn
                     return hand.Result.Winners[0] == seat ? 14 : 13;
                 default:
                     return -1;

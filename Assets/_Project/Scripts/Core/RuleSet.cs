@@ -37,7 +37,7 @@ namespace MahjongNight.Core
         /// <summary>Faan value of each pattern.</summary>
         public FaanTable Faan { get; set; } = FaanTable.Default();
 
-        /// <summary>Party mode: choose your draws, 3 faan to win, fun hands allowed.</summary>
+        /// <summary>Party mode: 3 faan to win, fun hands allowed. (Chosen draws are available but off.)</summary>
         public static RuleSet Party() => new RuleSet
         {
             DeadWallSize = 0,
@@ -45,7 +45,7 @@ namespace MahjongNight.Core
             MinFaan = 3,
             MaxFaan = 10,
             AllowSevenPairs = true,
-            ChooseDraws = true,
+            ChooseDraws = false,
         };
 
         /// <summary>Classic Hong Kong table rules: 3 faan minimum, 13 faan limit.</summary>

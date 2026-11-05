@@ -6,32 +6,36 @@ using UnityEngine;
 namespace MahjongNight.Game
 {
     /// <summary>
-    /// Greybox party match: you vs three <see cref="SimpleBot"/>s on a primitive 3D table.
-    /// Hands of mahjong, then Dumpling Roulette for the losers, until one player is left.
-    /// Builds everything at runtime — add to an empty GameObject (or use
-    /// "Mahjong Night → Create Greybox Scene") and press Play.
+    /// Greybox match: you vs three bots at a table with greybox bodies. Steer your head with
+    /// the cursor; look down to reach into your pocket and swap tiles (3 steps); watch the
+    /// others and press SPACE / click them to call out a cheat. Faan is the currency: win
+    /// hands to earn it, spend it on cheating upgrades between hands; a caught cheater pays
+    /// 10 faan to everyone. Highest score after the last hand wins.
     /// </summary>
     public sealed class GreyboxGame : MonoBehaviour
     {
         [Header("Rules")]
-        [Tooltip("Off = Party rules (any hand wins). On = Classic (3 faan minimum).")]
+        [Tooltip("Off = Party rules. On = Classic. Both need 3 faan to win.")]
         [SerializeField] private bool classicRules = false;
+        [Tooltip("Players pick which tile kind to draw (lose the turn if none is left).")]
+        [SerializeField] private bool chooseDraws = false;
 
-        [Header("Party")]
-        [Tooltip("Dumpling Roulette and knockouts. Off = plain mahjong, hands forever.")]
-        [SerializeField] private bool partyMode = true;
-        [Tooltip("Peppers you can survive before being knocked out.")]
-        [SerializeField] private int lives = 1;
-        [Tooltip("One steamer for the table (on) or one per player (off).")]
-        [SerializeField] private bool sharedSteamer = true;
+        [Header("Match")]
+        [SerializeField] private int handsPerMatch = 8;
+        [SerializeField] private int cheatPenalty = 10;
+        [SerializeField] private int falseAccusationFine = 3;
 
         [Header("Pacing")]
         [SerializeField] private float botTurnDelay = 0.8f;
         [SerializeField] private float botClaimDelay = 0.5f;
-        [Tooltip("Pause before each bot eats a dumpling (suspense!).")]
-        [SerializeField] private float rouletteDelay = 1.6f;
-        [Tooltip("Seconds before you auto-discard / auto-pass / auto-eat. 0 = no limit.")]
+        [Tooltip("Seconds before you auto-discard / auto-pass. 0 = no limit.")]
         [SerializeField] private float humanTimeLimit = 20f;
+
+        [Header("Bots")]
+        [Tooltip("How willing bots are to cheat when they see a good swap (0-1).")]
+        [SerializeField] private float botNerve = 0.7f;
+        [Tooltip("Chance a bot calls out a cheat it has spotted (0-1).")]
+        [SerializeField] private float botSpotChance = 0.9f;
 
         [Header("Debug")]
         [SerializeField] private bool revealBotHands = false;
@@ -41,39 +45,49 @@ namespace MahjongNight.Game
         private const int HumanSeat = 0;
         private const int FullLogLines = 16;
         private const int StatusLogLines = 3;
-        private const float FastForwardSpeed = 0.15f;
+        private const float SpotConeDegrees = 20f;
+        private const float WatchedConeDegrees = 35f;
+        private const float CallOutTargetDegrees = 25f;
+
+        private static readonly Color[] SeatColors =
+        {
+            new Color(0.25f, 0.45f, 0.85f), new Color(0.8f, 0.3f, 0.25f),
+            new Color(0.3f, 0.65f, 0.35f), new Color(0.6f, 0.35f, 0.7f),
+        };
 
         private RuleSet rules;
-        private PartyRules partyRules;
-        private PartyMatch match;
+        private MatchRules matchRules;
+        private ScoreMatch match;
         private HandState Hand => match.Hand;
-        private readonly IBot[] bots = new IBot[HandState.SeatCount];
-        private IBot humanAutoBot; // plays for you when your timer runs out
         private SeededRandom seedSource;
-        private SeededRandom botDumplingPicker;
+
+        private readonly IBot[] bots = new IBot[HandState.SeatCount];
+        private IBot humanAutoBot;
+        private readonly BotBrain[] brains = new BotBrain[HandState.SeatCount];
+        private readonly PlayerAvatar[] avatars = new PlayerAvatar[HandState.SeatCount];
+        private readonly CheatMotion[] cheats = new CheatMotion[HandState.SeatCount];
+        private readonly float[] lookingDownFor = new float[HandState.SeatCount];
 
         private TableView table;
-        private SteamerView steamer;
         private Camera cam;
+        private HeadLook headLook;
 
         private float nextBotTime;
         private float humanWaitStart;
-        private float flashUntil;
-        private bool fastForward;
-        private readonly int[] wins = new int[HandState.SeatCount];
+        private float callOutCooldownUntil;
 
         private readonly List<string> log = new List<string>();
         private int loggedHandEvents;
-        private int loggedPartyEvents;
+        private int loggedMatchEvents;
         private List<string> resultLines = new List<string>();
-        private string penaltyLine;
-        private string rouletteLine;
-        private string popupTitle;
-        private string popupText;
+        private readonly List<string> paymentLines = new List<string>();
+        private string popupTitle, popupText;
         private float popupUntil;
 
+        private Vector2 mouseGui;
+        private bool hasMouse;
         private TileView hoveredTile;
-        private DumplingView hoveredDumpling;
+        private int hoveredAvatar = -1;
         private readonly List<Rect> uiRects = new List<Rect>();
         private float stylesForHeight;
         private GUIStyle boxStyle, textStyle, titleStyle, centerStyle, logStyle, buttonStyle, pickerStyle;
@@ -84,17 +98,23 @@ namespace MahjongNight.Game
         private void Start()
         {
             rules = classicRules ? RuleSet.Classic() : RuleSet.Party();
-            partyRules = new PartyRules
+            rules.ChooseDraws = chooseDraws;
+            matchRules = new MatchRules
             {
-                RouletteEnabled = partyMode,
-                Lives = Mathf.Max(1, lives),
-                SharedSteamer = sharedSteamer,
+                HandsPerMatch = Mathf.Max(1, handsPerMatch),
+                CheatPenalty = cheatPenalty,
+                FalseAccusationFine = falseAccusationFine,
             };
             seedSource = new SeededRandom(seed != 0 ? (ulong)seed : (ulong)System.DateTime.Now.Ticks);
 
             SetUpCameraAndLight();
             table = new TableView(transform, new TileFactory());
-            steamer = new SteamerView(transform, partyRules.DumplingsPerSteamer);
+            for (int s = 0; s < HandState.SeatCount; s++)
+            {
+                int relative = (s - HumanSeat + HandState.SeatCount) % HandState.SeatCount;
+                avatars[s] = new PlayerAvatar(transform, s, relative, SeatColors[s], firstPerson: s == HumanSeat);
+            }
+            headLook = new HeadLook(cam.transform, avatars[HumanSeat].EyePosition);
             NewMatch();
         }
 
@@ -107,9 +127,7 @@ namespace MahjongNight.Game
                 go.tag = "MainCamera";
                 cam = go.AddComponent<Camera>();
             }
-            cam.transform.position = new Vector3(0f, 0.85f, -1.1f);
-            cam.transform.LookAt(new Vector3(0f, 0f, -0.3f));
-            cam.fieldOfView = 55f;
+            cam.fieldOfView = 65f;
             cam.nearClipPlane = 0.02f;
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.07f, 0.06f, 0.08f);
@@ -129,13 +147,11 @@ namespace MahjongNight.Game
         private void NewMatch()
         {
             ulong matchSeed = seedSource.NextUInt64();
-            match = new PartyMatch(rules, partyRules, matchSeed);
-            botDumplingPicker = new SeededRandom(matchSeed ^ 0x5EEDUL);
-            for (int s = 0; s < wins.Length; s++)
-                wins[s] = 0;
-            fastForward = false;
-            loggedPartyEvents = 0;
-            AddLog($"New match (seed {matchSeed}).");
+            match = new ScoreMatch(rules, matchRules, matchSeed);
+            loggedMatchEvents = 0;
+            for (int s = 0; s < HandState.SeatCount; s++)
+                brains[s] = s == HumanSeat ? null : new BotBrain(s, matchSeed + (ulong)s * 31UL);
+            AddLog($"New match: {matchRules.HandsPerMatch} hands (seed {matchSeed}).");
             StartHand();
         }
 
@@ -146,67 +162,92 @@ namespace MahjongNight.Game
             for (int s = 0; s < bots.Length; s++)
                 bots[s] = new SimpleBot(botSeed + (ulong)s * 7919UL);
             humanAutoBot = new SimpleBot(botSeed ^ 0xA070UL);
+            for (int s = 0; s < HandState.SeatCount; s++)
+            {
+                cheats[s] = null;
+                brains[s]?.ResetForHand(Time.time);
+            }
 
             loggedHandEvents = 0;
             resultLines = new List<string>();
-            penaltyLine = null;
-            rouletteLine = null;
-            FlushPartyEvents();
+            paymentLines.Clear();
+            FlushMatchEvents();
+            AddLog($"Your pocket: {string.Join(" ", match.Players[HumanSeat].Pocket)}");
             OnHandChanged();
         }
 
-        private float Pace => fastForward ? FastForwardSpeed : 1f;
+        private bool HandLive => match.Phase == MatchPhase.PlayingHand && Hand.Phase != HandPhase.Ended;
 
-        /// <summary>True while the human is still in the match and plays their own seat.</summary>
-        private bool HumanPlays(int seat) => seat == HumanSeat && match.Players[HumanSeat].IsAlive;
+        // ------------------------------------------------------------------ frame update
 
         private void Update()
         {
             if (match == null)
                 return;
+            float now = Time.time;
+            float dt = Time.deltaTime;
 
-            steamer.SetFlash(Time.time < flashUntil);
-
-            switch (match.Phase)
+            UpdateHumanHead(dt);
+            for (int s = 0; s < HandState.SeatCount; s++)
             {
-                case MatchPhase.PlayingHand:
-                    UpdateHand();
-                    break;
-                case MatchPhase.Roulette:
-                    UpdateRoulette();
-                    break;
-                case MatchPhase.BetweenHands:
-                    if (fastForward && Time.time >= nextBotTime)
-                        StartHand();
-                    break;
+                float pitch = s == HumanSeat ? headLook.Pitch : avatars[s].PitchDown;
+                lookingDownFor[s] = pitch >= HeadLook.LookingDownPitch ? lookingDownFor[s] + dt : 0f;
+            }
+
+            if (HandLive)
+            {
+                UpdateBotGaze(now);
+                UpdateCheats(now);
+                if (HandLive) UpdateBotCheating(now);
+                if (HandLive) UpdateSpotting(now, dt);
+                if (HandLive) UpdateTurns(now);
+            }
+
+            for (int s = 0; s < HandState.SeatCount; s++)
+            {
+                CheatMotion c = cheats[s];
+                bool active = c != null && c.InProgress;
+                avatars[s].SetRightHand(active ? c.Pose : HandPose.Rest, active ? c.Progress(now) : 0f, now);
+                avatars[s].Tick(dt, followGaze: s != HumanSeat);
             }
         }
 
-        // ------------------------------------------------------------------ mahjong hand
-
-        private void UpdateHand()
+        private void UpdateHumanHead(float dt)
         {
-            if (Hand.Phase == HandPhase.Ended)
-                return;
+            bool overUi = uiRects.Any(r => r.Contains(mouseGui));
+            if (!HandLive)
+                headLook.AimNeutral();
+            else if (hasMouse && !overUi && !PickerOpen)
+                headLook.AimFromCursor(mouseGui, Screen.width, Screen.height);
+            headLook.Tick(dt);
+            avatars[HumanSeat].SetHeadRotation(headLook.Rotation);
+        }
 
-            if (HumanActions().Count > 0 && humanTimeLimit > 0f && Time.time - humanWaitStart > humanTimeLimit)
+        private bool PickerOpen => HandLive && Hand.Phase == HandPhase.AwaitingDraw && Hand.CurrentSeat == HumanSeat;
+
+        // ------------------------------------------------------------------ mahjong turns
+
+        private void UpdateTurns(float now)
+        {
+            if (HumanActions().Count > 0 && humanTimeLimit > 0f && now - humanWaitStart > humanTimeLimit)
             {
                 AutoPlayHuman();
                 return;
             }
-            if (Time.time < nextBotTime)
+            if (now < nextBotTime)
                 return;
 
             if (Hand.Phase == HandPhase.AwaitingAction || Hand.Phase == HandPhase.AwaitingDraw)
             {
-                if (!HumanPlays(Hand.CurrentSeat))
-                    BotAct(Hand.CurrentSeat);
+                int s = Hand.CurrentSeat;
+                if (s != HumanSeat && !BotBusyCheating(s))
+                    BotAct(s);
             }
             else
             {
                 foreach (int s in Hand.SeatsAwaitingResponse())
                 {
-                    if (!HumanPlays(s))
+                    if (s != HumanSeat)
                     {
                         BotAct(s);
                         return;
@@ -215,10 +256,18 @@ namespace MahjongNight.Game
             }
         }
 
+        /// <summary>A bot holds its turn while it's mid-swap, or waiting for a moment to cheat a win.</summary>
+        private bool BotBusyCheating(int seat)
+        {
+            CheatMotion c = cheats[seat];
+            if (c != null && c.InProgress)
+                return true;
+            BotBrain b = brains[seat];
+            return b != null && b.Plan.HasValue && b.Plan.Value.MakesWin;
+        }
+
         private List<PlayerAction> HumanActions() =>
-            match.Phase == MatchPhase.PlayingHand && HumanPlays(HumanSeat)
-                ? Hand.GetLegalActions(HumanSeat)
-                : new List<PlayerAction>();
+            HandLive ? Hand.GetLegalActions(HumanSeat) : new List<PlayerAction>();
 
         private void BotAct(int seat)
         {
@@ -268,87 +317,327 @@ namespace MahjongNight.Game
             float delay = Hand.Phase == HandPhase.AwaitingAction ? botTurnDelay
                 : Hand.Phase == HandPhase.AwaitingDraw ? botTurnDelay * 0.6f
                 : botClaimDelay;
-            nextBotTime = Time.time + Pace * delay;
+            nextBotTime = Time.time + delay;
             if (Hand.Phase == HandPhase.Ended && match.Phase == MatchPhase.PlayingHand)
                 OnHandEnded();
-            table.Rebuild(Hand, HumanSeat, revealBotHands);
-            RefreshSteamer();
+            RebuildTable();
         }
 
         private void OnHandEnded()
         {
+            CancelCheats();
             HandResult result = Hand.Result;
             resultLines = new List<string>();
-
             if (result.Outcome == HandOutcome.ExhaustiveDraw)
             {
-                resultLines.Add("Draw game — the wall is empty.");
+                resultLines.Add("Draw game — the wall is empty. Nobody pays.");
             }
             else
             {
                 for (int i = 0; i < result.Winners.Count; i++)
                 {
                     int winner = result.Winners[i];
-                    wins[winner]++;
                     FaanResult score = FaanCalculator.Calculate(result.WinContexts[i], rules);
                     resultLines.Add($"{DescribeWin(result, winner)} — {score.Total} faan" + (score.IsLimit ? " (LIMIT!)" : ""));
                     foreach (FaanItem item in score.Items)
                         resultLines.Add($"    {item}   {FaanPatterns.ChineseName(item.Pattern)}");
                 }
             }
-
             match.ResolveHand();
-            FlushPartyEvents();
-            nextBotTime = Time.time + Pace * rouletteDelay;
-            humanWaitStart = Time.time;
+            FlushMatchEvents();
+            BotsShop();
         }
 
-        // ------------------------------------------------------------------ roulette
-
-        private void UpdateRoulette()
+        private void RebuildTable()
         {
-            int eater = match.CurrentEater;
-            if (HumanPlays(eater))
+            var hidden = new Dictionary<int, Tile>();
+            for (int s = 0; s < HandState.SeatCount; s++)
+                if (cheats[s] != null && cheats[s].InProgress)
+                    hidden[s] = cheats[s].HandTile;
+            table.Rebuild(Hand, HumanSeat, revealBotHands, hidden);
+        }
+
+        // ------------------------------------------------------------------ cheating
+
+        private float StepSeconds(int seat) => (float)Upgrades.CheatStepSeconds(match.Players[seat].Level(Upgrade.SleightOfHand));
+
+        private void StartCheat(int seat, Tile handTile, int pocketIndex)
+        {
+            var motion = new CheatMotion(seat, handTile, StepSeconds(seat), Time.time) { PocketIndex = pocketIndex };
+            cheats[seat] = motion;
+            RebuildTable();
+        }
+
+        /// <summary>Advances the timed steps of every cheat; applies the swap at the end of step 3.</summary>
+        private void UpdateCheats(float now)
+        {
+            for (int s = 0; s < HandState.SeatCount; s++)
             {
-                if (humanTimeLimit > 0f && Time.time - humanWaitStart > humanTimeLimit)
+                CheatMotion c = cheats[s];
+                if (c == null || !c.InProgress)
+                    continue;
+                bool human = s == HumanSeat;
+
+                switch (c.Step)
                 {
-                    AddLog("(Time's up — a dumpling was picked for you)");
-                    EatRandom(eater);
+                    case CheatStep.Stashing when c.StepTimeUp(now):
+                        c.Begin(human ? CheatStep.ChoosingPocketTile : CheatStep.PullingOut, now);
+                        break;
+                    case CheatStep.PullingOut when c.StepTimeUp(now):
+                        c.Begin(human ? CheatStep.ReadyToReturn : CheatStep.Returning, now);
+                        break;
+                    case CheatStep.Returning when c.StepTimeUp(now):
+                        CompleteCheat(c, now);
+                        break;
                 }
-                return;
             }
-            if (Time.time >= nextBotTime)
-                EatRandom(eater);
         }
 
-        private void EatRandom(int seat)
+        private void CompleteCheat(CheatMotion c, float now)
         {
-            List<int> slots = match.SteamerFor(seat).UneatenSlots();
-            Eat(seat, slots[botDumplingPicker.NextInt(slots.Count)]);
-        }
+            int s = c.Seat;
+            if (!Hand.CanPocketSwap(s))
+                return; // e.g. a claim is pending — keep holding the tile and try next frame
 
-        private void Eat(int seat, int slot)
-        {
-            if (!match.TryEat(seat, slot, out string error))
+            Tile pulled = match.Players[s].Pocket[c.PocketIndex];
+            bool ok = match.TryPocketSwap(s, c.HandTile, c.PocketIndex, out string error);
+            c.Finish(now, ok);
+            if (s == HumanSeat)
+                AddLog(ok ? $"You slipped {c.HandTile} into your pocket and {pulled} into your hand." : $"The swap fell through: {error}");
+
+            BotBrain brain = brains[s];
+            if (brain != null)
             {
-                Debug.LogWarning(error);
-                return;
+                CheatPlan? plan = brain.Plan;
+                brain.Plan = null;
+                brain.ReleaseGaze(now);
+                if (ok && plan.HasValue && plan.Value.MakesWin && Hand.GetLegalActions(s).Contains(PlayerAction.SelfDrawnWin(s)))
+                {
+                    Apply(PlayerAction.SelfDrawnWin(s));
+                    return;
+                }
             }
-            FlushPartyEvents();
-            hoveredDumpling = null;
-            steamer.SetHover(null);
-            humanWaitStart = Time.time;
-            nextBotTime = Time.time + Pace * rouletteDelay;
-            RefreshSteamer();
-            table.Rebuild(Hand, HumanSeat, revealBotHands);
+            FlushHandEvents();
+            RebuildTable();
         }
 
-        /// <summary>Shows the steamer of whoever is (about to be) eating, or the shared one.</summary>
-        private void RefreshSteamer()
+        private void CancelCheats()
         {
-            steamer.SetVisible(partyRules.RouletteEnabled);
-            int seat = match.CurrentEater >= 0 ? match.CurrentEater : HumanSeat;
-            steamer.Show(match.SteamerFor(seat));
+            for (int s = 0; s < HandState.SeatCount; s++)
+                if (cheats[s] != null && cheats[s].InProgress)
+                    cheats[s].Finish(Time.time, completed: false);
+        }
+
+        /// <summary>Is anyone (whose head <paramref name="seat"/> can see) looking at <paramref name="seat"/>'s hands?</summary>
+        private bool WatchedBySomeone(int seat)
+        {
+            for (int w = 0; w < HandState.SeatCount; w++)
+                if (w != seat && LookingAt(w, avatars[seat].CheatAnchor, WatchedConeDegrees))
+                    return true;
+            return false;
+        }
+
+        private bool LookingAt(int watcher, Vector3 point, float coneDegrees)
+        {
+            Vector3 eye = watcher == HumanSeat ? cam.transform.position : avatars[watcher].EyePosition;
+            Vector3 gaze = watcher == HumanSeat ? cam.transform.forward : avatars[watcher].Gaze;
+            return Vector3.Angle(gaze, point - eye) < coneDegrees;
+        }
+
+        private void UpdateBotGaze(float now)
+        {
+            int onTurn = Hand.Phase == HandPhase.AwaitingAction || Hand.Phase == HandPhase.AwaitingDraw ? Hand.CurrentSeat : -1;
+            for (int s = 0; s < HandState.SeatCount; s++)
+            {
+                BotBrain b = brains[s];
+                if (b == null || (cheats[s] != null && cheats[s].InProgress) || b.CallOutTarget >= 0)
+                    continue;
+                b.UpdateGaze(now, avatars[s], avatars, onTurn, lookingDownFor);
+            }
+        }
+
+        /// <summary>Bots look for worthwhile swaps and start one only when nobody is watching.</summary>
+        private void UpdateBotCheating(float now)
+        {
+            for (int s = 0; s < HandState.SeatCount; s++)
+            {
+                BotBrain b = brains[s];
+                if (b == null || b.CheatedThisHand || (cheats[s] != null && cheats[s].InProgress))
+                    continue;
+
+                bool myTurn = Hand.Phase == HandPhase.AwaitingAction && Hand.CurrentSeat == s;
+                if (!myTurn)
+                    b.CheckedThisTurn = false;
+
+                if (!b.Plan.HasValue)
+                {
+                    CheatPlan? plan = null;
+                    if (myTurn && !b.CheckedThisTurn)
+                    {
+                        b.CheckedThisTurn = true;
+                        plan = CheatAdvisor.FindWorthwhileSwap(Hand, s, match.Players[s].Pocket);
+                        if (!(plan.HasValue && plan.Value.MakesWin && b.Roll() < botNerve))
+                            plan = null;
+                    }
+                    else if (!myTurn && now >= b.NextCheatCheck)
+                    {
+                        b.NextCheatCheck = now + 4f + (float)b.Roll() * 4f;
+                        plan = CheatAdvisor.FindWorthwhileSwap(Hand, s, match.Players[s].Pocket);
+                        if (!(plan.HasValue && b.Roll() < botNerve * 0.35))
+                            plan = null;
+                    }
+                    if (plan.HasValue)
+                    {
+                        b.Plan = plan;
+                        b.WantCheatSince = now;
+                    }
+                }
+
+                if (!b.Plan.HasValue)
+                    continue;
+
+                CheatPlan p = b.Plan.Value;
+                bool stillValid = Hand.CanPocketSwap(s) && Hand.Seats[s].CountConcealed(p.FromHand) > 0
+                    && (!p.MakesWin || myTurn);
+                if (!stillValid || now - b.WantCheatSince > 4f)
+                {
+                    b.Plan = null; // lost the moment (or too many eyes) — give up this time
+                    b.WantCheatSince = -1f;
+                    continue;
+                }
+                if (WatchedBySomeone(s))
+                    continue;
+
+                b.CheatedThisHand = true;
+                b.WantCheatSince = -1f;
+                b.LookAtPocket(avatars[s]);
+                StartCheat(s, p.FromHand, p.PocketIndex);
+            }
+        }
+
+        /// <summary>Bots who watch a cheater's hands long enough call them out.</summary>
+        private void UpdateSpotting(float now, float dt)
+        {
+            for (int c = 0; c < HandState.SeatCount; c++)
+            {
+                CheatMotion motion = cheats[c];
+                bool exposed = motion != null && motion.Exposed(now);
+                for (int w = 0; w < HandState.SeatCount; w++)
+                {
+                    BotBrain b = brains[w];
+                    if (b == null || w == c)
+                        continue;
+                    if (!exposed)
+                    {
+                        b.WatchSeconds[c] = 0f;
+                        continue;
+                    }
+                    if (b.CallOutTarget >= 0 || b.Shrugged[c])
+                        continue;
+
+                    b.WatchSeconds[c] = LookingAt(w, avatars[c].CheatAnchor, SpotConeDegrees) ? b.WatchSeconds[c] + dt : 0f;
+                    double need = Upgrades.SpotSeconds(match.Players[c].Level(Upgrade.PokerFace), match.Players[w].Level(Upgrade.EagleEye));
+                    if (b.WatchSeconds[c] < need)
+                        continue;
+
+                    if (b.Roll() < botSpotChance)
+                    {
+                        b.CallOutTarget = c;
+                        b.CallOutAt = now + 0.3f + (float)b.Roll() * 0.6f;
+                        avatars[w].LookAt(avatars[c].BodyPoint);
+                    }
+                    else
+                    {
+                        b.Shrugged[c] = true;
+                    }
+                }
+            }
+
+            for (int w = 0; w < HandState.SeatCount; w++)
+            {
+                BotBrain b = brains[w];
+                if (b == null || b.CallOutTarget < 0 || now < b.CallOutAt)
+                    continue;
+                int target = b.CallOutTarget;
+                b.CallOutTarget = -1;
+                b.ReleaseGaze(now);
+                if (cheats[target] != null && cheats[target].Exposed(now))
+                {
+                    Caught(target, w);
+                    return;
+                }
+            }
+        }
+
+        private void Caught(int cheater, int caller)
+        {
+            CancelCheats();
+            match.CatchCheater(cheater, caller);
+            resultLines = new List<string>
+            {
+                cheater == HumanSeat
+                    ? $"{SeatName(caller)} caught YOU cheating! 出千!"
+                    : $"{SeatName(caller)} caught {SeatName(cheater)} cheating! 出千!",
+                $"    {SeatName(cheater)} pays {matchRules.CheatPenalty} faan to each player. The hand is over.",
+            };
+            FlushMatchEvents();
+            FlushHandEvents();
+            BotsShop();
+            ShowPopup("出千!  Caught cheating!", resultLines[0].Replace(" 出千!", ""));
+            RebuildTable();
+        }
+
+        /// <summary>The bot you're looking at most directly, or -1.</summary>
+        private int LookTarget()
+        {
+            int best = -1;
+            float bestAngle = CallOutTargetDegrees;
+            for (int s = 0; s < HandState.SeatCount; s++)
+            {
+                if (s == HumanSeat)
+                    continue;
+                float a = Vector3.Angle(cam.transform.forward, avatars[s].BodyPoint - cam.transform.position);
+                if (a < bestAngle)
+                {
+                    bestAngle = a;
+                    best = s;
+                }
+            }
+            return best;
+        }
+
+        private void HumanCallOut(int target)
+        {
+            if (target < 0 || !HandLive || Time.time < callOutCooldownUntil)
+                return;
+            if (cheats[target] != null && cheats[target].Exposed(Time.time))
+            {
+                Caught(target, HumanSeat);
+                return;
+            }
+            match.FalseAccusation(HumanSeat, target);
+            FlushMatchEvents();
+            callOutCooldownUntil = Time.time + 4f;
+            ShowPopup("Wrong call!", $"{SeatName(target)} wasn't cheating.\nYou pay {matchRules.FalseAccusationFine} faan to {SeatName(target)}.");
+        }
+
+        /// <summary>Bots spend spare faan on upgrades between hands.</summary>
+        private void BotsShop()
+        {
+            if (match.Phase != MatchPhase.BetweenHands)
+                return;
+            for (int s = 0; s < HandState.SeatCount; s++)
+            {
+                BotBrain b = brains[s];
+                if (b == null)
+                    continue;
+                var affordable = Upgrades.All
+                    .Where(u => match.CanBuy(s, u, out int cost) && match.Players[s].Score >= cost + 4)
+                    .ToList();
+                if (affordable.Count > 0)
+                    match.TryBuy(s, affordable[(int)(b.Roll() * affordable.Count) % affordable.Count], out _);
+            }
+            FlushMatchEvents();
         }
 
         // ------------------------------------------------------------------ names & log
@@ -356,9 +645,10 @@ namespace MahjongNight.Game
         private string SeatName(int seat)
         {
             string who = seat == HumanSeat ? "You" : "Bot " + seat;
-            string name = Hand == null ? who : $"{who} ({Hand.Seats[seat].SeatWind})";
-            return match.Players[seat].IsAlive ? name : name + " [out]";
+            return Hand == null ? who : $"{who} ({Hand.Seats[seat].SeatWind})";
         }
+
+        private string ShortName(int seat) => seat == HumanSeat ? "You" : "Bot " + seat;
 
         private string Possessive(int seat) => seat == HumanSeat ? "your" : SeatName(seat) + "'s";
 
@@ -383,20 +673,18 @@ namespace MahjongNight.Game
         {
             for (; loggedHandEvents < Hand.Events.Count; loggedHandEvents++)
             {
-                HandEvent e = Hand.Events[loggedHandEvents];
-                switch (e)
+                switch (Hand.Events[loggedHandEvents])
                 {
-                    case TileDrawnEvent d when d.Seat == HumanSeat && HumanPlays(HumanSeat):
+                    case TileDrawnEvent d when d.Seat == HumanSeat:
                         AddLog($"You draw {d.Tile}{(d.FromBack ? " (replacement)" : "")}");
                         break;
                     case BonusTileRevealedEvent b:
                         AddLog($"{SeatName(b.Seat)} reveals {b.Tile}");
                         break;
-                    case DrawFailedEvent f when f.Seat == HumanSeat && HumanPlays(HumanSeat):
+                    case DrawFailedEvent f when f.Seat == HumanSeat:
                         AddLog($"You tried to draw {f.Tile} — none left. Turn lost.");
                         ShowPopup("Invalid draw!",
-                            $"There are no {LongName(f.Tile)} left in the wall —\n" +
-                            "they're all in other hands or on the table.\nYou lose your turn.");
+                            $"There are no {LongName(f.Tile)} left in the wall —\nthey're all in other hands or on the table.\nYou lose your turn.");
                         break;
                     case DrawFailedEvent f:
                         AddLog($"{SeatName(f.Seat)} reached for a tile that wasn't there — turn lost.");
@@ -407,68 +695,48 @@ namespace MahjongNight.Game
                     case MeldDeclaredEvent m:
                         AddLog($"{SeatName(m.Seat)}: {m.Meld}");
                         break;
-                    case HandEndedEvent h:
-                        if (h.Result.Outcome == HandOutcome.ExhaustiveDraw)
-                            AddLog("Draw game — the wall is empty.");
-                        else
-                            foreach (int w in h.Result.Winners)
-                                AddLog(DescribeWin(h.Result, w));
+                    case HandEndedEvent h when h.Result.Outcome == HandOutcome.Win:
+                        foreach (int w in h.Result.Winners)
+                            AddLog(DescribeWin(h.Result, w));
+                        break;
+                    case HandEndedEvent h when h.Result.Outcome == HandOutcome.ExhaustiveDraw:
+                        AddLog("Draw game — the wall is empty.");
                         break;
                 }
             }
         }
 
-        private void FlushPartyEvents()
+        private void FlushMatchEvents()
         {
-            for (; loggedPartyEvents < match.Events.Count; loggedPartyEvents++)
+            for (; loggedMatchEvents < match.Events.Count; loggedMatchEvents++)
             {
-                PartyEvent e = match.Events[loggedPartyEvents];
-                switch (e)
+                switch (match.Events[loggedMatchEvents])
                 {
-                    case HandStartedEvent h:
-                        AddLog($"— Hand {h.HandNumber}: {SeatName(h.Dealer)} deals, {h.PrevailingWind} round —");
+                    case MatchHandStartedEvent h:
+                        AddLog($"— Hand {h.HandNumber}/{matchRules.HandsPerMatch}: {SeatName(h.Dealer)} deals, {h.PrevailingWind} round —");
                         break;
-                    case PenaltiesAssignedEvent p:
-                        var eaters = Enumerable.Range(0, p.DumplingsPerSeat.Count)
-                            .Where(s => p.DumplingsPerSeat[s] > 0)
-                            .Select(s => p.DumplingsPerSeat[s] > 1 ? $"{SeatName(s)} ×{p.DumplingsPerSeat[s]}" : SeatName(s))
-                            .ToList();
-                        if (!partyRules.RouletteEnabled)
-                            penaltyLine = null;
-                        else if (eaters.Count == 0)
-                            penaltyLine = "Nobody has to eat this time.";
-                        else
-                            penaltyLine = (p.BigHand ? "BIG HAND! " : "") + "Must eat: " + string.Join(", ", eaters);
-                        if (penaltyLine != null)
-                            AddLog(penaltyLine);
+                    case PaymentEvent p:
+                        string line = $"{SeatName(p.From)} {(p.From == HumanSeat ? "pay" : "pays")} {(p.To == HumanSeat ? "you" : SeatName(p.To))} {p.Amount} faan";
+                        paymentLines.Add(line);
+                        AddLog(line);
                         break;
-                    case DumplingEatenEvent d:
-                        rouletteLine = d.Pepper
-                            ? $"{SeatName(d.Seat)} bites into the GHOST PEPPER!"
-                            : $"{SeatName(d.Seat)} eats a dumpling… safe. ({d.RemainingInSteamer} left)";
-                        if (d.Pepper)
-                            flashUntil = Time.time + 1.5f;
-                        AddLog(rouletteLine);
+                    case CheaterCaughtEvent c:
+                        AddLog($"{SeatName(c.Caller)} called out {SeatName(c.Seat)} — caught cheating!");
                         break;
-                    case KnockedOutEvent k:
-                        rouletteLine += $"  {SeatName(k.Seat)} is knocked out!";
-                        AddLog($"{SeatName(k.Seat)} is knocked out!");
+                    case FalseAccusationEvent f:
+                        AddLog($"{SeatName(f.Seat)} wrongly accused {SeatName(f.Accused)}.");
                         break;
-                    case SteamerRefilledEvent _:
-                        AddLog("The steamer is refilled.");
+                    case UpgradeBoughtEvent u:
+                        AddLog($"{SeatName(u.Seat)} bought {Upgrades.Name(u.Upgrade)} {u.Level} ({u.Cost} faan).");
                         break;
-                    case MatchWonEvent w:
-                        AddLog($"{SeatName(w.Seat)} {(w.Seat == HumanSeat ? "win" : "wins")} the match!");
+                    case MatchOverEvent o:
+                        AddLog("Match over! Winner: " + string.Join(", ", o.Winners.Select(SeatName)));
                         break;
                 }
             }
         }
 
         // ------------------------------------------------------------------ input & UI
-        //
-        // Layout: status + recent log in the top-left corner (floor, not table); bot name tags
-        // float above their hands; the action bar and the result/roulette panel sit just above
-        // your hand. Corners near the table edges are left clear for melds and flowers.
 
         private void OnGUI()
         {
@@ -480,8 +748,19 @@ namespace MahjongNight.Game
             if (e.type == EventType.Layout)
                 uiRects.Clear();
 
-            if (e.type == EventType.MouseMove || e.type == EventType.MouseDown || e.type == EventType.Repaint)
+            if (e.type == EventType.MouseMove || e.type == EventType.MouseDown || e.type == EventType.MouseDrag || e.type == EventType.Repaint)
+            {
+                mouseGui = e.mousePosition;
+                hasMouse = true;
                 UpdateHover(e.mousePosition);
+            }
+
+            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Space && HandLive)
+            {
+                e.Use();
+                HumanCallOut(LookTarget());
+                GUIUtility.ExitGUI();
+            }
 
             if (e.type == EventType.MouseDown && e.button == 0 && !uiRects.Any(r => r.Contains(e.mousePosition)))
             {
@@ -490,13 +769,13 @@ namespace MahjongNight.Game
                     Tile tile = hoveredTile.Tile;
                     e.Use();
                     Apply(PlayerAction.Discard(HumanSeat, tile));
-                    GUIUtility.ExitGUI(); // state changed; abort this GUI pass cleanly
+                    GUIUtility.ExitGUI();
                 }
-                else if (hoveredDumpling != null)
+                else if (hoveredAvatar >= 0 && HandLive)
                 {
-                    int slot = hoveredDumpling.Slot;
+                    int target = hoveredAvatar;
                     e.Use();
-                    Eat(HumanSeat, slot);
+                    HumanCallOut(target);
                     GUIUtility.ExitGUI();
                 }
             }
@@ -505,15 +784,22 @@ namespace MahjongNight.Game
             float statusBottom = DrawStatus();
             if (showFullLog)
                 DrawFullLog(statusBottom + 8);
-            if (match.Phase == MatchPhase.PlayingHand && Hand.Phase != HandPhase.Ended)
+
+            if (HandLive)
             {
-                DrawActionBar();
-                if (Hand.Phase == HandPhase.AwaitingDraw && HumanPlays(Hand.CurrentSeat))
+                bool cheatUi = headLook.LookingDown || (cheats[HumanSeat] != null && cheats[HumanSeat].InProgress);
+                if (cheatUi)
+                    DrawCheatStrip();
+                else
+                    DrawActionBar();
+                if (PickerOpen)
                     DrawPicker();
+                if (!headLook.LookingDown)
+                    DrawLookHint();
             }
             else
             {
-                DrawResult();
+                DrawBetweenHands();
             }
             DrawPopup();
         }
@@ -521,28 +807,23 @@ namespace MahjongNight.Game
         private void UpdateHover(Vector2 guiPosition)
         {
             TileView nextTile = null;
-            DumplingView nextDumpling = null;
+            int nextAvatar = -1;
             bool overUi = uiRects.Any(r => r.Contains(guiPosition));
-            bool canDiscard = match.Phase == MatchPhase.PlayingHand && Hand.Phase == HandPhase.AwaitingAction
-                && Hand.CurrentSeat == HumanSeat && HumanPlays(HumanSeat);
-            bool canEat = match.Phase == MatchPhase.Roulette && HumanPlays(match.CurrentEater);
+            bool canDiscard = HandLive && Hand.Phase == HandPhase.AwaitingAction && Hand.CurrentSeat == HumanSeat
+                && !headLook.LookingDown;
 
-            if (cam != null && !overUi && (canDiscard || canEat))
+            if (cam != null && !overUi && HandLive)
             {
                 var screen = new Vector3(guiPosition.x, Screen.height - guiPosition.y, 0f);
                 if (Physics.Raycast(cam.ScreenPointToRay(screen), out RaycastHit hit, 10f))
                 {
-                    if (canDiscard)
-                    {
-                        TileView view = hit.collider.GetComponentInParent<TileView>();
-                        if (view != null && view.InHand && view.Seat == HumanSeat
-                            && Hand.GetLegalActions(HumanSeat).Contains(PlayerAction.Discard(HumanSeat, view.Tile)))
-                            nextTile = view;
-                    }
-                    else
-                    {
-                        nextDumpling = hit.collider.GetComponent<DumplingView>();
-                    }
+                    TileView view = hit.collider.GetComponentInParent<TileView>();
+                    AvatarView avatar = hit.collider.GetComponent<AvatarView>();
+                    if (canDiscard && view != null && view.InHand && view.Seat == HumanSeat
+                        && Hand.GetLegalActions(HumanSeat).Contains(PlayerAction.Discard(HumanSeat, view.Tile)))
+                        nextTile = view;
+                    else if (avatar != null && avatar.Seat != HumanSeat)
+                        nextAvatar = avatar.Seat;
                 }
             }
 
@@ -554,11 +835,7 @@ namespace MahjongNight.Game
                 if (hoveredTile != null)
                     hoveredTile.transform.position = hoveredTile.RestPosition + Vector3.up * 0.015f;
             }
-            if (nextDumpling != hoveredDumpling)
-            {
-                hoveredDumpling = nextDumpling;
-                steamer.SetHover(hoveredDumpling);
-            }
+            hoveredAvatar = nextAvatar;
         }
 
         private void EnsureStyles()
@@ -574,7 +851,7 @@ namespace MahjongNight.Game
             centerStyle = new GUIStyle(textStyle) { alignment = TextAnchor.MiddleCenter };
             logStyle = new GUIStyle(textStyle) { fontSize = Mathf.RoundToInt(size * 0.85f) };
             logStyle.normal.textColor = new Color(0.75f, 0.75f, 0.75f);
-            buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = size, padding = new RectOffset(12, 12, 6, 6) };
+            buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = size, richText = true, padding = new RectOffset(12, 12, 6, 6) };
             pickerStyle = new GUIStyle(GUI.skin.button)
             {
                 fontSize = Mathf.RoundToInt(size * 0.8f),
@@ -603,29 +880,24 @@ namespace MahjongNight.Game
         private float HandTopY()
         {
             Vector3 p = cam.WorldToScreenPoint(TableView.HumanHandTop);
-            return Screen.height - p.y;
+            return p.z > 0f ? Screen.height - p.y : Screen.height * 0.8f;
         }
+
+        private string ScoresLine() =>
+            "Scores: " + string.Join("  ·  ", Enumerable.Range(0, HandState.SeatCount).Select(s => $"{ShortName(s)} {match.Players[s].Score}"));
 
         private float DrawStatus()
         {
+            MatchPlayer me = match.Players[HumanSeat];
             var lines = new List<string>
             {
-                $"Hand {match.HandNumber} · {(classicRules ? "Classic" : "Party")} · {match.PrevailingWind} round · Wall {Hand.Wall.DrawableCount}",
-                match.Phase == MatchPhase.PlayingHand && Hand.Phase != HandPhase.Ended
-                    ? $"Turn: {SeatName(Hand.CurrentSeat)}"
-                    : "Hand over",
-                $"{SeatName(HumanSeat)} · wins {wins[HumanSeat]}{LivesText(HumanSeat)}",
+                $"Hand {match.HandNumber}/{matchRules.HandsPerMatch} · {(classicRules ? "Classic" : "Party")} · {match.PrevailingWind} round · Wall {Hand.Wall.DrawableCount}",
+                HandLive ? $"Turn: {SeatName(Hand.CurrentSeat)}" : "Hand over",
+                ScoresLine(),
+                "Your upgrades: " + string.Join(" · ", Upgrades.All.Select(u => $"{Upgrades.Name(u)} {me.Level(u)}")),
             };
-            if (partyRules.RouletteEnabled)
-            {
-                Steamer st = match.SteamerFor(match.CurrentEater >= 0 ? match.CurrentEater : HumanSeat);
-                lines.Add($"Steamer: {st.Remaining} left · pepper chance {Mathf.RoundToInt((float)st.PepperChance * 100f)}%");
-            }
-            bool spectating = !match.Players[HumanSeat].IsAlive && match.Phase != MatchPhase.MatchOver;
-            if (spectating)
-                lines.Add("You're out — spectating.");
 
-            float w = Unit * 19;
+            float w = Unit * 24;
             int logCount = Mathf.Min(StatusLogLines, log.Count);
             float buttonH = Unit * 1.8f;
             float h = Pad * 2 + LineHeight * lines.Count + logCount * LineHeight * 0.85f + buttonH + 6;
@@ -644,25 +916,16 @@ namespace MahjongNight.Game
                 GUI.Label(new Rect(x, y, iw, LineHeight * 0.85f), line, logStyle);
                 y += LineHeight * 0.85f;
             }
-
             if (GUI.Button(new Rect(x, y + 6, Unit * 7, buttonH), showFullLog ? "Hide log" : "Show log", buttonStyle))
                 showFullLog = !showFullLog;
-            if (spectating && GUI.Button(new Rect(x + Unit * 7 + 8, y + 6, Unit * 9, buttonH),
-                    fastForward ? "Normal speed" : "Fast forward", buttonStyle))
-                fastForward = !fastForward;
             return r.yMax;
         }
-
-        private string LivesText(int seat) =>
-            partyRules.RouletteEnabled && partyRules.Lives > 1 && match.Players[seat].IsAlive
-                ? $" · lives {match.Players[seat].Lives}"
-                : "";
 
         private void DrawFullLog(float top)
         {
             int count = Mathf.Min(FullLogLines, log.Count);
             float lh = LineHeight * 0.85f;
-            Rect r = Panel(new Rect(Pad, top, Unit * 24, Pad * 2 + count * lh));
+            Rect r = Panel(new Rect(Pad, top, Unit * 26, Pad * 2 + count * lh));
             float y = r.y + Pad;
             foreach (string line in log.Skip(log.Count - count))
             {
@@ -671,20 +934,21 @@ namespace MahjongNight.Game
             }
         }
 
-        /// <summary>Name tags floating above each bot's hand.</summary>
+        /// <summary>Name tags floating above each bot's head.</summary>
         private void DrawSeatTags()
         {
             for (int s = 0; s < HandState.SeatCount; s++)
             {
                 if (s == HumanSeat)
                     continue;
-                Vector3 p = cam.WorldToScreenPoint(TableView.SeatAnchor(s, HumanSeat));
+                Vector3 p = cam.WorldToScreenPoint(avatars[s].TagPoint);
                 if (p.z <= 0f)
                     continue;
-                bool active = (match.Phase == MatchPhase.PlayingHand && Hand.Phase != HandPhase.Ended && Hand.CurrentSeat == s)
-                    || match.CurrentEater == s;
-                string text = $"{(active ? "> " : "")}{SeatName(s)} · wins {wins[s]}{LivesText(s)}";
-                GUIStyle style = active ? titleStyle : textStyle;
+                bool active = HandLive && Hand.CurrentSeat == s;
+                bool calling = brains[s] != null && brains[s].CallOutTarget >= 0;
+                string text = (calling ? "<color=#ff6060>!!</color> " : active ? "> " : "") +
+                    $"{SeatName(s)} · {match.Players[s].Score} faan";
+                GUIStyle style = active || hoveredAvatar == s ? titleStyle : textStyle;
                 float w = TextWidth(style, text) + Pad * 2;
                 float h = LineHeight + 4;
                 var r = new Rect(p.x - w / 2f, Screen.height - p.y - h / 2f, w, h);
@@ -692,6 +956,130 @@ namespace MahjongNight.Game
                 GUI.Label(new Rect(r.x + Pad, r.y + 2, r.width - Pad * 2, r.height - 4), text, style);
             }
         }
+
+        /// <summary>Tells you who a SPACE / click call-out would accuse.</summary>
+        private void DrawLookHint()
+        {
+            int target = hoveredAvatar >= 0 ? hoveredAvatar : LookTarget();
+            if (target < 0)
+                return;
+            string text = Time.time < callOutCooldownUntil
+                ? "Catch your breath before calling out again…"
+                : $"Watching {SeatName(target)} — press SPACE or click them to call out cheating (出千!)";
+            float w = TextWidth(centerStyle, text) + Pad * 2;
+            var r = new Rect(Screen.width - w - Pad, Pad, w, LineHeight + Pad);
+            GUI.Box(r, GUIContent.none, boxStyle);
+            GUI.Label(r, text, centerStyle);
+        }
+
+        // ------------------------------------------------------------------ the pocket cheat UI
+
+        /// <summary>
+        /// Bottom strip shown while you look down into your lap: the three steps of the swap.
+        /// Each step only starts while you're looking down — and while you are, you can't see
+        /// who's watching you.
+        /// </summary>
+        private void DrawCheatStrip()
+        {
+            CheatMotion c = cheats[HumanSeat];
+            IReadOnlyList<Tile> pocket = match.Players[HumanSeat].Pocket;
+            bool down = headLook.LookingDown;
+            float now = Time.time;
+
+            string title;
+            List<string> labels = new List<string>();
+            List<System.Action> actions = new List<System.Action>();
+            string footer = c != null && c.InProgress
+                ? "<color=#ff8080>Anyone watching your hands right now can call you out!</color>"
+                : $"Pocket: {string.Join(" ", pocket)}   ·   Steps take {StepSeconds(HumanSeat):0.0}s each   ·   Caught = pay {matchRules.CheatPenalty} faan to everyone";
+
+            if (c == null || !c.InProgress)
+            {
+                title = "Your pocket — 1) pick a tile from your hand to slip into your pocket";
+                if (Hand.CanPocketSwap(HumanSeat))
+                {
+                    foreach (Tile t in Hand.Seats[HumanSeat].Concealed.Distinct().OrderBy(t => t))
+                    {
+                        Tile tile = t;
+                        labels.Add(PickerLabel(tile));
+                        actions.Add(() => StartCheat(HumanSeat, tile, -1));
+                    }
+                }
+                else
+                {
+                    title = "Your pocket — can't swap right now (you have a claim pending)";
+                }
+            }
+            else
+            {
+                switch (c.Step)
+                {
+                    case CheatStep.Stashing:
+                        title = $"1) Slipping {c.HandTile} into your pocket…  {Mathf.RoundToInt(c.Progress(now) * 100)}%";
+                        break;
+                    case CheatStep.ChoosingPocketTile:
+                        title = down ? "2) Pick a tile to pull out of your pocket" : "2) Look down to reach into your pocket";
+                        for (int i = 0; i < pocket.Count; i++)
+                        {
+                            int index = i;
+                            labels.Add(PickerLabel(pocket[i]));
+                            actions.Add(() =>
+                            {
+                                c.PocketIndex = index;
+                                c.Begin(CheatStep.PullingOut, Time.time);
+                            });
+                        }
+                        break;
+                    case CheatStep.PullingOut:
+                        title = $"2) Pulling {pocket[c.PocketIndex]} out of your pocket…  {Mathf.RoundToInt(c.Progress(now) * 100)}%";
+                        break;
+                    case CheatStep.ReadyToReturn:
+                        title = down ? "3) Slip it into your hand" : "3) Look down to slip it into your hand";
+                        labels.Add($"Slip {pocket[c.PocketIndex]} into your hand");
+                        actions.Add(() => c.Begin(CheatStep.Returning, Time.time));
+                        break;
+                    default:
+                        title = $"3) Slipping {pocket[c.PocketIndex]} into your hand…  {Mathf.RoundToInt(c.Progress(now) * 100)}%";
+                        break;
+                }
+            }
+
+            float buttonH = Unit * 2.8f;
+            float h = Pad * 2 + LineHeight * 2 + (labels.Count > 0 ? buttonH + 6 : 0f);
+            Rect r = Panel(new Rect(Pad, Screen.height - h - Pad, Screen.width - Pad * 2, h));
+            float y = r.y + Pad;
+            GUI.Label(new Rect(r.x + Pad, y, r.width - Pad * 2, LineHeight), title, titleStyle);
+            y += LineHeight;
+
+            if (labels.Count > 0)
+            {
+                bool wasEnabled = GUI.enabled;
+                GUI.enabled = down;
+                float bw = Mathf.Min(Unit * 6.5f, (r.width - Pad * 2) / labels.Count - 4f);
+                if (labels.Count == 1)
+                    bw = TextWidth(buttonStyle, labels[0]) + 24;
+                float x = r.center.x - (bw + 4) * labels.Count / 2f;
+                for (int i = 0; i < labels.Count; i++)
+                {
+                    GUIStyle style = labels.Count == 1 ? buttonStyle : pickerStyle;
+                    if (GUI.Button(new Rect(x, y + 4, bw, buttonH), labels[i], style))
+                    {
+                        GUI.enabled = wasEnabled;
+                        actions[i]();
+                        GUIUtility.ExitGUI();
+                    }
+                    x += bw + 4;
+                }
+                GUI.enabled = wasEnabled;
+                y += buttonH + 6;
+            }
+            GUI.Label(new Rect(r.x + Pad, y, r.width - Pad * 2, LineHeight), footer, textStyle);
+        }
+
+        private static string PickerLabel(Tile t) =>
+            $"<color={PickerColor(t)}><b>{TileFactory.LabelFor(t).Replace("\n", " ")}</b></color>";
+
+        // ------------------------------------------------------------------ turn prompts
 
         /// <summary>One-line prompt plus a row of claim/turn buttons, just above the human's hand.</summary>
         private void DrawActionBar()
@@ -701,7 +1089,7 @@ namespace MahjongNight.Game
 
             string message;
             if (legal.Count == 0)
-                message = $"Waiting for {SeatName(Hand.CurrentSeat)}…";
+                message = $"Waiting for {SeatName(Hand.CurrentSeat)}…   (push the cursor to the screen edges to look around)";
             else if (Hand.Phase == HandPhase.AwaitingDraw)
                 message = "Your turn — pick the tile you want to draw";
             else if (Hand.Phase == HandPhase.AwaitingAction)
@@ -713,11 +1101,13 @@ namespace MahjongNight.Game
             if (legal.Count > 0 && humanTimeLimit > 0f)
                 message += $"   ({SecondsLeft()}s)";
 
-            string hint = HumanPlays(HumanSeat) ? ReadyHint() : null;
+            string hint = ReadyHint();
             List<string> labels = buttons.Select(Describe).ToList();
             List<System.Action> actions = buttons.Select(a => (System.Action)(() => Apply(a))).ToList();
-            DrawBottomPanel(null, new List<string> { message }.Concat(hint != null ? new[] { hint } : new string[0]).ToList(),
-                labels, actions, centered: true);
+            var lines = new List<string> { message };
+            if (hint != null)
+                lines.Add(hint);
+            DrawBottomPanel(null, lines, labels, actions, centered: true);
         }
 
         private int SecondsLeft() => Mathf.Max(0, Mathf.CeilToInt(humanTimeLimit - (Time.time - humanWaitStart)));
@@ -753,12 +1143,8 @@ namespace MahjongNight.Game
             }
         }
 
-        // ------------------------------------------------------------------ chosen draws
+        // ------------------------------------------------------------------ chosen draws (optional rule)
 
-        /// <summary>
-        /// The draw menu: one button per tile kind. Shows only what you could know yourself —
-        /// copies you can see (your hand + the table) and which picks would win — never the wall.
-        /// </summary>
         private void DrawPicker()
         {
             int[] seen = Hand.VisibleKindCounts(HumanSeat);
@@ -795,7 +1181,7 @@ namespace MahjongNight.Game
                 bool hopeless = seen[k] >= TileSet.CopiesPerPlayableKind || gone.Contains(t);
 
                 GUI.backgroundColor = wins ? new Color(0.35f, 1f, 0.35f) : hopeless ? new Color(0.45f, 0.45f, 0.45f) : oldBackground;
-                string label = $"<color={PickerColor(t)}><b>{TileFactory.LabelFor(t).Replace("\n", " ")}</b></color>\n" +
+                string label = PickerLabel(t) + "\n" +
                     (gone.Contains(t) ? "none left" : $"seen {seen[k]}/4") + (wins ? $"\n<color=#ff0>WIN {win.Total}</color>" : "");
                 if (GUI.Button(b, label, pickerStyle))
                 {
@@ -834,6 +1220,8 @@ namespace MahjongNight.Game
             }
         }
 
+        // ------------------------------------------------------------------ popups
+
         private void ShowPopup(string title, string text)
         {
             popupTitle = title;
@@ -841,7 +1229,7 @@ namespace MahjongNight.Game
             popupUntil = Time.time + 4f;
         }
 
-        /// <summary>Centred notice (e.g. invalid draw); closes itself after a few seconds.</summary>
+        /// <summary>Centred notice; closes itself after a few seconds.</summary>
         private void DrawPopup()
         {
             if (popupText == null || Time.time > popupUntil)
@@ -850,7 +1238,7 @@ namespace MahjongNight.Game
             float w = Mathf.Max(TextWidth(titleStyle, popupTitle), lines.Max(l => TextWidth(centerStyle, l))) + Pad * 4;
             float buttonH = Unit * 2.1f;
             float h = Pad * 2 + LineHeight * 1.3f + lines.Length * LineHeight + buttonH + 10;
-            Rect r = Panel(new Rect((Screen.width - w) / 2f, Screen.height * 0.32f, w, h));
+            Rect r = Panel(new Rect((Screen.width - w) / 2f, Screen.height * 0.3f, w, h));
             Panel(r); // drawn twice for a more opaque box
 
             float y = r.y + Pad;
@@ -870,63 +1258,83 @@ namespace MahjongNight.Game
             }
         }
 
-        /// <summary>Hand result, penalties, roulette progress, and the next-step button.</summary>
-        private void DrawResult()
-        {
-            string title = resultLines.Count > 0 ? resultLines[0] : "";
-            var lines = resultLines.Skip(1).ToList();
-            if (penaltyLine != null)
-                lines.Add(penaltyLine);
-            if (rouletteLine != null)
-                lines.Add(rouletteLine);
+        // ------------------------------------------------------------------ between hands: results + shop
 
+        private void DrawBetweenHands()
+        {
+            var lines = new List<string>(resultLines.Skip(1));
+            lines.AddRange(paymentLines.Select(p => "    " + p));
+            lines.Add(ScoresLine());
+
+            string title = resultLines.Count > 0 ? resultLines[0] : "";
             var labels = new List<string>();
             var actions = new List<System.Action>();
 
-            switch (match.Phase)
+            if (match.Phase == MatchPhase.MatchOver)
             {
-                case MatchPhase.Roulette:
-                    int eater = match.CurrentEater;
-                    if (HumanPlays(eater))
+                bool youWon = match.Winners.Contains(HumanSeat);
+                lines.Add(youWon
+                    ? (match.Winners.Count > 1 ? "MATCH OVER — you share first place!" : "MATCH OVER — YOU WIN!")
+                    : "MATCH OVER — winner: " + string.Join(", ", match.Winners.Select(SeatName)));
+                labels.Add("New match");
+                actions.Add(NewMatch);
+            }
+            else
+            {
+                MatchPlayer me = match.Players[HumanSeat];
+                lines.Add($"Upgrade shop — you have {me.Score} faan:");
+                foreach (Upgrade u in Upgrades.All)
+                {
+                    int level = me.Level(u);
+                    bool canBuy = match.CanBuy(HumanSeat, u, out int cost);
+                    string price = level >= Upgrades.MaxLevel ? "MAX" : $"{cost} faan";
+                    lines.Add($"    {Upgrades.Name(u)} {level}/{Upgrades.MaxLevel} — {Upgrades.Description(u)}");
+                    if (level < Upgrades.MaxLevel)
                     {
-                        Steamer st = match.SteamerFor(eater);
-                        lines.Add($"YOUR TURN TO EAT — click a dumpling in the steamer ({st.Remaining} left, " +
-                            $"1 is the pepper)   ({SecondsLeft()}s)");
-                        labels.Add("Eat a random one");
-                        actions.Add(() => EatRandom(HumanSeat));
+                        Upgrade upgrade = u;
+                        labels.Add((canBuy ? "" : "<color=#888>") + $"Buy {Upgrades.Name(u)} {level + 1} ({price})" + (canBuy ? "" : "</color>"));
+                        actions.Add(() =>
+                        {
+                            if (!match.TryBuy(HumanSeat, upgrade, out string error))
+                                ShowPopup("Can't buy that", error);
+                            FlushMatchEvents();
+                        });
                     }
-                    else
-                    {
-                        lines.Add($"{SeatName(eater)} reaches for a dumpling…");
-                    }
-                    break;
-                case MatchPhase.BetweenHands:
-                    labels.Add("Next hand");
-                    actions.Add(StartHand);
-                    break;
-                case MatchPhase.MatchOver:
-                    lines.Add(match.Winner == HumanSeat
-                        ? "YOU WIN THE MATCH! Last one standing."
-                        : $"{SeatName(match.Winner)} wins the match — last one standing.");
-                    labels.Add("New match");
-                    actions.Add(NewMatch);
-                    break;
+                }
+                labels.Add("<b>Next hand</b>");
+                actions.Add(StartHand);
             }
             DrawBottomPanel(title, lines, labels, actions, centered: false);
         }
 
-        /// <summary>Panel just above the human's hand: optional bold title, text lines, a row of buttons.</summary>
+        /// <summary>Panel just above the human's hand: optional bold title, text lines, rows of buttons.</summary>
         private void DrawBottomPanel(string title, List<string> lines, List<string> buttonLabels,
             List<System.Action> buttonActions, bool centered)
         {
             GUIStyle lineStyle = centered ? centerStyle : textStyle;
             List<float> widths = buttonLabels.Select(l => TextWidth(buttonStyle, l) + 8).ToList();
             const float gap = 8f;
-            float rowW = widths.Sum() + gap * Mathf.Max(0, widths.Count - 1);
+            float maxRow = Screen.width * 0.85f - Pad * 2;
+
+            // Wrap buttons into rows.
+            var rows = new List<List<int>> { new List<int>() };
+            float rowWidth = 0f;
+            for (int i = 0; i < widths.Count; i++)
+            {
+                if (rows[rows.Count - 1].Count > 0 && rowWidth + gap + widths[i] > maxRow)
+                {
+                    rows.Add(new List<int>());
+                    rowWidth = 0f;
+                }
+                rowWidth += (rows[rows.Count - 1].Count > 0 ? gap : 0f) + widths[i];
+                rows[rows.Count - 1].Add(i);
+            }
+            if (widths.Count == 0)
+                rows.Clear();
+
             float buttonH = Unit * 2.1f;
             bool hasTitle = !string.IsNullOrEmpty(title);
-
-            float w = rowW;
+            float w = rows.Count > 0 ? rows.Max(row => row.Sum(i => widths[i]) + gap * (row.Count - 1)) : 0f;
             if (hasTitle)
                 w = Mathf.Max(w, TextWidth(titleStyle, title));
             foreach (string line in lines)
@@ -934,9 +1342,10 @@ namespace MahjongNight.Game
             w = Mathf.Min(w + Pad * 2, Screen.width * 0.85f);
 
             float h = Pad * 2 + (hasTitle ? LineHeight * 1.2f : 0f) + lines.Count * LineHeight
-                + (widths.Count > 0 ? buttonH + 8 : 0f);
-            float bottom = HandTopY() - Unit * 0.4f;
-            Rect r = Panel(new Rect((Screen.width - w) / 2f, bottom - h, w, h));
+                + rows.Count * (buttonH + 6) + (rows.Count > 0 ? 4 : 0);
+            float bottom = Mathf.Min(HandTopY() - Unit * 0.4f, Screen.height - Pad);
+            float top = Mathf.Max(Pad, bottom - h);
+            Rect r = Panel(new Rect((Screen.width - w) / 2f, top, w, h));
 
             float x = r.x + Pad;
             float y = r.y + Pad;
@@ -952,15 +1361,21 @@ namespace MahjongNight.Game
                 y += LineHeight;
             }
 
-            float bx = r.center.x - rowW / 2f;
-            for (int i = 0; i < widths.Count; i++)
+            y += 4;
+            foreach (List<int> row in rows)
             {
-                if (GUI.Button(new Rect(bx, y + 8, widths[i], buttonH), buttonLabels[i], buttonStyle))
+                float rw = row.Sum(i => widths[i]) + gap * (row.Count - 1);
+                float bx = r.center.x - rw / 2f;
+                foreach (int i in row)
                 {
-                    buttonActions[i]();
-                    GUIUtility.ExitGUI();
+                    if (GUI.Button(new Rect(bx, y, widths[i], buttonH), buttonLabels[i], buttonStyle))
+                    {
+                        buttonActions[i]();
+                        GUIUtility.ExitGUI();
+                    }
+                    bx += widths[i] + gap;
                 }
-                bx += widths[i] + gap;
+                y += buttonH + 6;
             }
         }
     }

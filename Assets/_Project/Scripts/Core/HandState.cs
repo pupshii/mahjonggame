@@ -24,6 +24,8 @@ namespace MahjongNight.Core
         private readonly SeatState[] seats = new SeatState[SeatCount];
         private readonly PlayerAction?[] responses = new PlayerAction?[SeatCount];
         private readonly List<HandEvent> events = new List<HandEvent>();
+        private readonly List<Tile> stashed = new List<Tile>();   // game tiles slipped into pockets
+        private readonly List<Tile> injected = new List<Tile>();  // outside tiles slipped into hands
 
         private int discardCount;
         private bool mustDiscardOnly;          // after claiming a chow/pung
@@ -99,6 +101,11 @@ namespace MahjongNight.Core
         public HandResult Result { get; private set; }
         /// <summary>Everything that has happened this hand, in order.</summary>
         public IReadOnlyList<HandEvent> Events => events;
+
+        /// <summary>Game tiles that left play into someone's pocket (host-only).</summary>
+        public IReadOnlyList<Tile> StashedTiles => stashed;
+        /// <summary>Outside tiles that entered play from someone's pocket (host-only).</summary>
+        public IReadOnlyList<Tile> InjectedTiles => injected;
 
         public static int NextSeat(int seat) => (seat + 1) % SeatCount;
 
@@ -221,6 +228,69 @@ namespace MahjongNight.Core
                 default:
                     return -1;
             }
+        }
+
+        // ------------------------------------------------------------------ cheating
+
+        /// <summary>
+        /// Whether <paramref name="seat"/> may complete a pocket swap right now: the hand is live,
+        /// they aren't promoting a kong, and they have no pending claim that depends on their tiles.
+        /// </summary>
+        public bool CanPocketSwap(int seat)
+        {
+            if (Phase == HandPhase.Ended || seat < 0 || seat >= SeatCount)
+                return false;
+            if (Phase == HandPhase.AwaitingRobKong && seat == CurrentSeat)
+                return false;
+            if ((Phase == HandPhase.AwaitingClaims || Phase == HandPhase.AwaitingRobKong)
+                && responses[seat] is PlayerAction r && r.Type != ActionType.Pass)
+                return false;
+            return true;
+        }
+
+        /// <summary>
+        /// The cheat: <paramref name="fromHand"/> goes into the pocket and <paramref name="fromPocket"/>
+        /// (a tile from outside the game — there may now be five of a kind) takes its place.
+        /// Hand size is unchanged. Whether anyone saw it is decided by the presentation layer.
+        /// </summary>
+        public bool TryPocketSwap(int seat, Tile fromHand, Tile fromPocket, out string error)
+        {
+            if (!CanPocketSwap(seat))
+            {
+                error = "Can't swap tiles right now.";
+                return false;
+            }
+            if (!fromPocket.IsValid || fromPocket.IsBonus)
+            {
+                error = "Pocket tiles must be playable tiles.";
+                return false;
+            }
+            SeatState s = seats[seat];
+            if (s.CountConcealed(fromHand) == 0)
+            {
+                error = $"{fromHand} isn't in your hand.";
+                return false;
+            }
+
+            error = null;
+            s.RemoveConcealed(fromHand, 1);
+            s.concealed.Add(fromPocket);
+            stashed.Add(fromHand);
+            injected.Add(fromPocket);
+            if (seat == CurrentSeat && LastDrawnTile == fromHand && s.CountConcealed(fromHand) == 0)
+                LastDrawnTile = fromPocket;
+            events.Add(new PocketSwapEvent(seat, fromHand, fromPocket));
+            return true;
+        }
+
+        /// <summary>Stops the hand because <paramref name="cheater"/> was caught (no winner).</summary>
+        public void CatchCheater(int cheater)
+        {
+            if (Phase == HandPhase.Ended)
+                throw new InvalidOperationException("The hand is already over.");
+            Phase = HandPhase.Ended;
+            Result = HandResult.Caught(cheater);
+            events.Add(new HandEndedEvent(Result));
         }
 
         /// <summary>Seats that still owe a response in the current claim window.</summary>

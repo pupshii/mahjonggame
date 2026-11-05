@@ -6,7 +6,9 @@ namespace MahjongNight.Core
     {
         Win,
         /// <summary>流局 — the wall ran out with no winner.</summary>
-        ExhaustiveDraw
+        ExhaustiveDraw,
+        /// <summary>出千 — a cheater was caught; the hand stops with no winner.</summary>
+        CheatCaught
     }
 
     /// <summary>How a hand ended. Flags feed faan scoring in M2.</summary>
@@ -27,6 +29,8 @@ namespace MahjongNight.Core
         }
 
         public HandOutcome Outcome { get; }
+        /// <summary>The caught cheater when <see cref="Outcome"/> is CheatCaught, else -1.</summary>
+        public int Cheater { get; private set; } = -1;
         /// <summary>
         /// Winning seats, nearest to the discarder first; more than one only with
         /// <see cref="RuleSet.AllowMultipleWinners"/>. The winning tile goes into Winners[0]'s
@@ -53,8 +57,15 @@ namespace MahjongNight.Core
         internal static HandResult Draw() =>
             new HandResult(HandOutcome.ExhaustiveDraw, new int[0], new WinContext[0], -1, null, false, false, false, false);
 
+        internal static HandResult Caught(int cheater) =>
+            new HandResult(HandOutcome.CheatCaught, new int[0], new WinContext[0], -1, null, false, false, false, false)
+            {
+                Cheater = cheater,
+            };
+
         public override string ToString() =>
-            Outcome == HandOutcome.ExhaustiveDraw
+            Outcome == HandOutcome.CheatCaught ? $"Seat {Cheater} caught cheating"
+            : Outcome == HandOutcome.ExhaustiveDraw
                 ? "Draw game"
                 : $"Win by {string.Join(",", Winners)} on {WinningTile}" + (SelfDrawn ? " (self-drawn)" : $" from seat {Discarder}");
     }
