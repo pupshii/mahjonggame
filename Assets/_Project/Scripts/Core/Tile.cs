@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace MahjongNight.Core
 {
@@ -134,6 +135,66 @@ namespace MahjongNight.Core
                 case TileSuit.Season: return $"S{Rank}";
                 default: return "??";
             }
+        }
+
+        /// <summary>Parses a short code produced by <see cref="ToString"/> (case-insensitive).</summary>
+        public static bool TryParse(string code, out Tile tile)
+        {
+            tile = default;
+            if (string.IsNullOrWhiteSpace(code))
+                return false;
+
+            string c = code.Trim().ToUpperInvariant();
+            switch (c)
+            {
+                case "E": tile = WindTile(Wind.East); return true;
+                case "S": tile = WindTile(Wind.South); return true;
+                case "W": tile = WindTile(Wind.West); return true;
+                case "N": tile = WindTile(Wind.North); return true;
+                case "RD": tile = DragonTile(Dragon.Red); return true;
+                case "GD": tile = DragonTile(Dragon.Green); return true;
+                case "WD": tile = DragonTile(Dragon.White); return true;
+            }
+
+            if (c.Length != 2)
+                return false;
+
+            if ((c[0] == 'F' || c[0] == 'S') && c[1] >= '1' && c[1] <= '4')
+            {
+                tile = new Tile(c[0] == 'F' ? TileSuit.Flower : TileSuit.Season, c[1] - '0');
+                return true;
+            }
+
+            if (c[0] >= '1' && c[0] <= '9')
+            {
+                int rank = c[0] - '0';
+                switch (c[1])
+                {
+                    case 'D': tile = Dots(rank); return true;
+                    case 'B': tile = Bamboo(rank); return true;
+                    case 'C': tile = Characters(rank); return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Parses a short code; throws <see cref="FormatException"/> if invalid.</summary>
+        public static Tile Parse(string code)
+        {
+            if (!TryParse(code, out Tile tile))
+                throw new FormatException($"'{code}' is not a tile code.");
+            return tile;
+        }
+
+        /// <summary>Parses space-separated codes, e.g. "1D 2D 3D RD RD".</summary>
+        public static List<Tile> ParseList(string codes)
+        {
+            var result = new List<Tile>();
+            if (codes == null)
+                return result;
+            foreach (string part in codes.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries))
+                result.Add(Parse(part));
+            return result;
         }
 
         public bool Equals(Tile other) => Suit == other.Suit && Rank == other.Rank;
