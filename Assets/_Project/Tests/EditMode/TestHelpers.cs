@@ -69,8 +69,9 @@ namespace MahjongNight.Core.Tests
         public static HandState Deal(string[] hands, string frontDraws = "", string backDraws = "",
             IWinValidator validator = null, RuleSet rules = null, int dealer = 0)
         {
+            // Scenario tests script their wins explicitly, so default to no wins at all.
             return HandState.DealFromWall(rules ?? RuleSet.Party(), dealer, Wind.East,
-                Build(dealer, hands, frontDraws, backDraws), validator);
+                Build(dealer, hands, frontDraws, backDraws), validator ?? NeverWinValidator.Instance);
         }
     }
 
@@ -84,7 +85,7 @@ namespace MahjongNight.Core.Tests
             this.predicate = predicate;
         }
 
-        public bool IsWinningHand(IReadOnlyList<Tile> concealed, IReadOnlyList<Meld> melds) => predicate(concealed);
+        public bool IsWinningHand(WinContext context) => predicate(context.Concealed);
 
         /// <summary>Wins when the hand holds every tile in <paramref name="codes"/>.</summary>
         public static PredicateWinValidator Holding(string codes)
@@ -108,14 +109,14 @@ namespace MahjongNight.Core.Tests
             this.oneIn = oneIn;
         }
 
-        public bool IsWinningHand(IReadOnlyList<Tile> concealed, IReadOnlyList<Meld> melds)
+        public bool IsWinningHand(WinContext context)
         {
             unchecked
             {
                 int h = 17;
-                foreach (Tile t in concealed.OrderBy(t => t))
+                foreach (Tile t in context.Concealed.OrderBy(t => t))
                     h = h * 31 + t.KindIndex;
-                h = h * 31 + melds.Count;
+                h = h * 31 + context.Melds.Count;
                 return ((h & 0x7fffffff) % oneIn) == 0;
             }
         }

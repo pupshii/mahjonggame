@@ -11,7 +11,7 @@ namespace MahjongNight.Core.Tests
     {
         private const int MaxSteps = 5000;
 
-        private static HandState PlayRandomHand(ulong seed, IWinValidator validator, RuleSet rules)
+        private static HandState PlayRandomHand(ulong seed, IWinValidator validator, RuleSet rules, bool alwaysWin = false)
         {
             var rng = new SeededRandom(seed * 7919 + 1);
             HandState hand = HandState.Deal(rules, dealer: (int)(seed % 4), Wind.East, seed, validator);
@@ -28,6 +28,12 @@ namespace MahjongNight.Core.Tests
                 Assert.That(legal, Is.Not.Empty, $"Seed {seed}: seat {seat} is stuck in {hand.Phase}");
 
                 PlayerAction action = legal[rng.NextInt(legal.Count)];
+                if (alwaysWin)
+                {
+                    foreach (PlayerAction a in legal)
+                        if (a.Type == ActionType.Win || a.Type == ActionType.SelfDrawnWin)
+                            action = a;
+                }
                 Assert.That(hand.TryApply(action, out string error), Is.True, $"Seed {seed}: {error}");
                 CheckInvariants(hand, seed, step);
             }
@@ -45,7 +51,7 @@ namespace MahjongNight.Core.Tests
         {
             for (ulong seed = 1; seed <= 200; seed++)
             {
-                HandState hand = PlayRandomHand(seed, null, RuleSet.Party());
+                HandState hand = PlayRandomHand(seed, NeverWinValidator.Instance, RuleSet.Party());
                 Assert.That(hand.Result.Outcome, Is.EqualTo(HandOutcome.ExhaustiveDraw), $"Seed {seed}");
                 Assert.That(hand.Wall.CanDraw, Is.False);
             }
@@ -74,6 +80,30 @@ namespace MahjongNight.Core.Tests
             Assert.That(selfDrawn, Is.GreaterThan(0));
             Assert.That(claimed, Is.GreaterThan(0));
             Assert.That(draws, Is.GreaterThan(0), "Some hands should play to the end of the wall");
+        }
+
+        [Test]
+        public void RandomHands_WithRealRules_ScoreEveryWin()
+        {
+            int wins = 0;
+            foreach (RuleSet rules in new[] { RuleSet.Party(), RuleSet.Classic() })
+            {
+                for (ulong seed = 1; seed <= 200; seed++)
+                {
+                    HandState hand = PlayRandomHand(seed, null, rules, alwaysWin: true);
+                    if (hand.Result.Outcome != HandOutcome.Win)
+                        continue;
+                    wins++;
+                    Assert.That(hand.Result.WinContexts.Count, Is.EqualTo(hand.Result.Winners.Count));
+                    foreach (WinContext ctx in hand.Result.WinContexts)
+                    {
+                        FaanResult score = FaanCalculator.Calculate(ctx, rules);
+                        Assert.That(score, Is.Not.Null, $"Seed {seed}: declared win is not a complete hand");
+                        Assert.That(score.Total, Is.GreaterThanOrEqualTo(rules.MinFaan), $"Seed {seed}: {score}");
+                    }
+                }
+            }
+            TestContext.WriteLine($"real-rule wins: {wins} of 400");
         }
     }
 }

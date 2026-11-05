@@ -25,6 +25,7 @@ namespace MahjongNight.Core
         private readonly PlayerAction?[] responses = new PlayerAction?[SeatCount];
         private readonly List<HandEvent> events = new List<HandEvent>();
 
+        private int discardCount;
         private bool mustDiscardOnly;          // after claiming a chow/pung
         private bool lastDrawWasKongReplacement;
         private Tile pendingKongTile;          // during AwaitingRobKong
@@ -38,19 +39,24 @@ namespace MahjongNight.Core
             Dealer = dealer;
             PrevailingWind = prevailingWind;
             Wall = wall;
-            this.winValidator = winValidator ?? NeverWinValidator.Instance;
+            this.winValidator = winValidator ?? new FaanWinValidator(rules);
 
             for (int i = 0; i < SeatCount; i++)
                 seats[i] = new SeatState(i, (Wind)(((i - dealer + SeatCount) % SeatCount) + 1));
 
             DealStartingHands();
             ReplaceStartingBonusTiles();
+            // The dealer's "drawn" tile is their 14th (or the replacement for it if it was a bonus tile).
+            LastDrawnTile = seats[dealer].concealed[seats[dealer].concealed.Count - 1];
 
             CurrentSeat = dealer;
             Phase = HandPhase.AwaitingAction;
         }
 
-        /// <summary>Starts a hand with a wall shuffled from <paramref name="seed"/>.</summary>
+        /// <summary>
+        /// Starts a hand with a wall shuffled from <paramref name="seed"/>. Wins are checked with
+        /// <paramref name="winValidator"/>, defaulting to <see cref="FaanWinValidator"/> for <paramref name="rules"/>.
+        /// </summary>
         public static HandState Deal(RuleSet rules, int dealer, Wind prevailingWind, ulong seed,
             IWinValidator winValidator = null)
         {
@@ -120,7 +126,7 @@ namespace MahjongNight.Core
                     if (seat != CurrentSeat && responses[seat] == null)
                     {
                         actions.Add(PlayerAction.Pass(seat));
-                        if (WouldWinWith(seats[seat], pendingKongTile))
+                        if (winValidator.IsWinningHand(ClaimContext(seat, pendingKongTile, robbedKong: true)))
                             actions.Add(PlayerAction.Win(seat));
                     }
                     break;
@@ -162,7 +168,7 @@ namespace MahjongNight.Core
                         actions.Add(PlayerAction.PromoteKong(seat.Seat, m.FirstTile));
             }
 
-            if (winValidator.IsWinningHand(seat.concealed, seat.melds))
+            if (winValidator.IsWinningHand(SelfDrawnContext(seat.Seat)))
                 actions.Add(PlayerAction.SelfDrawnWin(seat.Seat));
         }
 
@@ -172,7 +178,7 @@ namespace MahjongNight.Core
             int s = seat.Seat;
             actions.Add(PlayerAction.Pass(s));
 
-            if (WouldWinWith(seat, discard))
+            if (winValidator.IsWinningHand(ClaimContext(s, discard, robbedKong: false)))
                 actions.Add(PlayerAction.Win(s));
 
             int have = seat.CountConcealed(discard);
@@ -197,10 +203,48 @@ namespace MahjongNight.Core
             }
         }
 
-        private bool WouldWinWith(SeatState seat, Tile tile)
+        private bool NoMeldsDeclared()
         {
-            var hand = new List<Tile>(seat.concealed) { tile };
-            return winValidator.IsWinningHand(hand, seat.melds);
+            foreach (SeatState s in seats)
+                if (s.melds.Count > 0)
+                    return false;
+            return true;
+        }
+
+        private WinContext BaseContext(int seat, List<Tile> concealed)
+        {
+            SeatState s = seats[seat];
+            return new WinContext
+            {
+                Seat = seat,
+                SeatWind = s.SeatWind,
+                PrevailingWind = PrevailingWind,
+                Concealed = concealed,
+                Melds = s.melds.ToArray(),
+                Bonus = s.bonus.ToArray(),
+                LastTile = !Wall.CanDraw,
+            };
+        }
+
+        /// <summary>Context for <paramref name="seat"/> winning with the tile it just drew.</summary>
+        private WinContext SelfDrawnContext(int seat)
+        {
+            WinContext c = BaseContext(seat, new List<Tile>(seats[seat].concealed));
+            c.WinningTile = LastDrawnTile ?? default;
+            c.SelfDrawn = true;
+            c.KongReplacement = lastDrawWasKongReplacement;
+            c.HeavenlyHand = seat == Dealer && discardCount == 0 && NoMeldsDeclared();
+            return c;
+        }
+
+        /// <summary>Context for <paramref name="seat"/> winning on someone else's tile (discard or robbed kong).</summary>
+        private WinContext ClaimContext(int seat, Tile tile, bool robbedKong)
+        {
+            WinContext c = BaseContext(seat, new List<Tile>(seats[seat].concealed) { tile });
+            c.WinningTile = tile;
+            c.RobbedKong = robbedKong;
+            c.EarthlyHand = !robbedKong && seat != Dealer && LastDiscardSeat == Dealer && discardCount == 1 && NoMeldsDeclared();
+            return c;
         }
 
         // ------------------------------------------------------------------ commands
@@ -232,8 +276,8 @@ namespace MahjongNight.Core
                     DoPromoteKong(action.Seat, action.Tile);
                     break;
                 case ActionType.SelfDrawnWin:
-                    EndWithWin(new[] { action.Seat }, -1, LastDrawnTile, selfDrawn: true, robbedKong: false,
-                        kongReplacement: lastDrawWasKongReplacement);
+                    EndWithWin(new[] { action.Seat }, new[] { SelfDrawnContext(action.Seat) }, -1, LastDrawnTile,
+                        selfDrawn: true, robbedKong: false, kongReplacement: lastDrawWasKongReplacement);
                     break;
                 default:
                     responses[action.Seat] = action;
@@ -255,6 +299,7 @@ namespace MahjongNight.Core
             SeatState s = seats[seat];
             s.RemoveConcealed(tile, 1);
             s.discards.Add(tile);
+            discardCount++;
             LastDiscard = tile;
             LastDiscardSeat = seat;
             LastDrawnTile = null;
@@ -331,9 +376,10 @@ namespace MahjongNight.Core
             {
                 if (!Rules.AllowMultipleWinners)
                     winners.RemoveRange(1, winners.Count - 1);
+                List<WinContext> contexts = winners.ConvertAll(w => ClaimContext(w, tile, robbedKong: false));
                 TakeDiscard(discarder);
                 seats[winners[0]].concealed.Add(tile); // physically, the nearest winner takes it
-                EndWithWin(winners, discarder, tile, selfDrawn: false, robbedKong: false, kongReplacement: false);
+                EndWithWin(winners, contexts, discarder, tile, selfDrawn: false, robbedKong: false, kongReplacement: false);
                 return;
             }
 
@@ -385,9 +431,10 @@ namespace MahjongNight.Core
             {
                 if (!Rules.AllowMultipleWinners)
                     winners.RemoveRange(1, winners.Count - 1);
+                List<WinContext> contexts = winners.ConvertAll(w => ClaimContext(w, tile, robbedKong: true));
                 seats[promoter].RemoveConcealed(tile, 1);
                 seats[winners[0]].concealed.Add(tile);
-                EndWithWin(winners, promoter, tile, selfDrawn: false, robbedKong: true, kongReplacement: false);
+                EndWithWin(winners, contexts, promoter, tile, selfDrawn: false, robbedKong: true, kongReplacement: false);
                 return;
             }
 
@@ -460,11 +507,11 @@ namespace MahjongNight.Core
             }
         }
 
-        private void EndWithWin(IReadOnlyList<int> winners, int discarder, Tile? tile, bool selfDrawn, bool robbedKong,
-            bool kongReplacement)
+        private void EndWithWin(IReadOnlyList<int> winners, IReadOnlyList<WinContext> contexts, int discarder, Tile? tile,
+            bool selfDrawn, bool robbedKong, bool kongReplacement)
         {
             Phase = HandPhase.Ended;
-            Result = new HandResult(HandOutcome.Win, winners, discarder, tile, selfDrawn, robbedKong,
+            Result = new HandResult(HandOutcome.Win, winners, contexts, discarder, tile, selfDrawn, robbedKong,
                 kongReplacementWin: selfDrawn && kongReplacement, lastTileWin: !Wall.CanDraw);
             events.Add(new HandEndedEvent(Result));
         }
@@ -492,9 +539,7 @@ namespace MahjongNight.Core
                         seats[seat].concealed.Add(Wall.DrawFront());
                 }
             }
-            Tile extra = Wall.DrawFront();
-            seats[Dealer].concealed.Add(extra);
-            LastDrawnTile = extra;
+            seats[Dealer].concealed.Add(Wall.DrawFront());
         }
 
         private void ReplaceStartingBonusTiles()

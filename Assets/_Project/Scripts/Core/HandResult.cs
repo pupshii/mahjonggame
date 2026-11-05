@@ -12,11 +12,12 @@ namespace MahjongNight.Core
     /// <summary>How a hand ended. Flags feed faan scoring in M2.</summary>
     public sealed class HandResult
     {
-        internal HandResult(HandOutcome outcome, IReadOnlyList<int> winners, int discarder, Tile? winningTile,
-            bool selfDrawn, bool robbedKong, bool kongReplacementWin, bool lastTileWin)
+        internal HandResult(HandOutcome outcome, IReadOnlyList<int> winners, IReadOnlyList<WinContext> winContexts,
+            int discarder, Tile? winningTile, bool selfDrawn, bool robbedKong, bool kongReplacementWin, bool lastTileWin)
         {
             Outcome = outcome;
             Winners = winners;
+            WinContexts = winContexts;
             Discarder = discarder;
             WinningTile = winningTile;
             SelfDrawn = selfDrawn;
@@ -32,6 +33,11 @@ namespace MahjongNight.Core
         /// hand; any other winner's winning hand is their concealed tiles + <see cref="WinningTile"/>.
         /// </summary>
         public IReadOnlyList<int> Winners { get; }
+        /// <summary>
+        /// The winning hand of each winner, aligned with <see cref="Winners"/>. Score with
+        /// <see cref="FaanCalculator.Calculate"/>.
+        /// </summary>
+        public IReadOnlyList<WinContext> WinContexts { get; }
         /// <summary>Seat that dealt in (discard or robbed kong), or -1 for self-drawn / draw game.</summary>
         public int Discarder { get; }
         public Tile? WinningTile { get; }
@@ -45,7 +51,7 @@ namespace MahjongNight.Core
         public bool LastTileWin { get; }
 
         internal static HandResult Draw() =>
-            new HandResult(HandOutcome.ExhaustiveDraw, new int[0], -1, null, false, false, false, false);
+            new HandResult(HandOutcome.ExhaustiveDraw, new int[0], new WinContext[0], -1, null, false, false, false, false);
 
         public override string ToString() =>
             Outcome == HandOutcome.ExhaustiveDraw
