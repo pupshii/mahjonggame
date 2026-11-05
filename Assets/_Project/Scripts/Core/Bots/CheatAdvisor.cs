@@ -27,8 +27,10 @@ namespace MahjongNight.Core
     /// </summary>
     public static class CheatAdvisor
     {
-        public static CheatPlan? FindWorthwhileSwap(HandState hand, int seat, IReadOnlyList<Tile> pocket)
+        /// <param name="minWinFaan">Smallest win worth cheating for (defaults to the table minimum).</param>
+        public static CheatPlan? FindWorthwhileSwap(HandState hand, int seat, IReadOnlyList<Tile> pocket, int minWinFaan = 0)
         {
+            int winTarget = System.Math.Max(minWinFaan, hand.Rules.MinFaan);
             if (!hand.CanPocketSwap(seat) || pocket.Count == 0)
                 return null;
 
@@ -54,7 +56,7 @@ namespace MahjongNight.Core
                         baseCtx.Concealed = swapped;
                         baseCtx.WinningTile = pocket[p];
                         FaanResult score = FaanCalculator.Calculate(baseCtx, hand.Rules);
-                        if (score != null && score.Total >= hand.Rules.MinFaan)
+                        if (score != null && (score.IsLimit || score.Total >= winTarget))
                             return new CheatPlan(h, p, pocket[p], makesWin: true);
                     }
                 }

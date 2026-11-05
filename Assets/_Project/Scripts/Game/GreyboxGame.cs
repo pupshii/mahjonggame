@@ -32,6 +32,8 @@ namespace MahjongNight.Game
         [SerializeField] private float humanTimeLimit = 20f;
 
         [Header("Bots")]
+        [Tooltip("0 = bots take any legal win; 1 = bots chase big hands (one suit, all pungs) and turn down cheap wins early in a hand.")]
+        [SerializeField] private float botAmbition = 1f;
         [Tooltip("How willing bots are to cheat when they see a good swap (0-1).")]
         [SerializeField] private float botNerve = 0.7f;
         [Tooltip("Chance a bot calls out a cheat it has spotted (0-1).")]
@@ -61,7 +63,7 @@ namespace MahjongNight.Game
         private HandState Hand => match.Hand;
         private SeededRandom seedSource;
 
-        private readonly IBot[] bots = new IBot[HandState.SeatCount];
+        private readonly SimpleBot[] bots = new SimpleBot[HandState.SeatCount];
         private IBot humanAutoBot;
         private readonly BotBrain[] brains = new BotBrain[HandState.SeatCount];
         private readonly PlayerAvatar[] avatars = new PlayerAvatar[HandState.SeatCount];
@@ -162,7 +164,7 @@ namespace MahjongNight.Game
             match.StartHand();
             ulong botSeed = seedSource.NextUInt64();
             for (int s = 0; s < bots.Length; s++)
-                bots[s] = new SimpleBot(botSeed + (ulong)s * 7919UL);
+                bots[s] = new SimpleBot(botSeed + (ulong)s * 7919UL, ambition: botAmbition);
             humanAutoBot = new SimpleBot(botSeed ^ 0xA070UL);
             for (int s = 0; s < HandState.SeatCount; s++)
             {
@@ -477,7 +479,7 @@ namespace MahjongNight.Game
                     if (myTurn && !b.CheckedThisTurn)
                     {
                         b.CheckedThisTurn = true;
-                        plan = CheatAdvisor.FindWorthwhileSwap(Hand, s, match.Players[s].Pocket);
+                        plan = CheatAdvisor.FindWorthwhileSwap(Hand, s, match.Players[s].Pocket, bots[s].TargetFaan(Hand));
                         if (!(plan.HasValue && plan.Value.MakesWin && b.Roll() < botNerve))
                             plan = null;
                     }
