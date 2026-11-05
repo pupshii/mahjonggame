@@ -117,6 +117,8 @@ namespace MahjongNight.Game
         public Vector3 BodyPoint => World(new Vector3(0f, 0.2f, -1.05f));
 
         public Vector3 OwnTilesPoint => World(new Vector3(0f, 0.03f, -0.78f));
+        /// <summary>The discards on this player's side of the middle (where they glance at the table).</summary>
+        public Vector3 DiscardsPoint => World(new Vector3(0f, 0.02f, -0.42f));
         public Vector3 PocketPoint => World(PocketPos);
         public Vector3 TagPoint => World(NeckPos + new Vector3(0f, 0.3f, 0f));
 

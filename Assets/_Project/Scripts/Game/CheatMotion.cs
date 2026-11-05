@@ -7,20 +7,17 @@ namespace MahjongNight.Game
         None,
         /// <summary>1. Slipping a tile from the hand into the pocket (timed).</summary>
         Stashing,
-        /// <summary>Hand in the pocket, waiting for the player to choose a pocket tile.</summary>
-        ChoosingPocketTile,
         /// <summary>2. Pulling the chosen tile out of the pocket (timed).</summary>
         PullingOut,
-        /// <summary>Holding the tile by the pocket, waiting for the player to slip it in.</summary>
-        ReadyToReturn,
         /// <summary>3. Slipping the tile into the hand (timed); the swap happens at the end.</summary>
         Returning,
         Done
     }
 
     /// <summary>
-    /// One player's pocket swap in progress. While <see cref="Exposed"/> is true, anyone looking
-    /// at them long enough can spot it.
+    /// One player's pocket swap: three timed steps played back to back. Others can only spot it
+    /// while it's <see cref="InProgress"/>; a call-out still counts for a moment afterwards
+    /// (<see cref="Exposed"/>).
     /// </summary>
     public sealed class CheatMotion
     {
@@ -77,9 +74,7 @@ namespace MahjongNight.Game
                 switch (Step)
                 {
                     case CheatStep.Stashing: return HandPose.ToPocket;
-                    case CheatStep.ChoosingPocketTile:
-                    case CheatStep.PullingOut:
-                    case CheatStep.ReadyToReturn: return HandPose.InPocket;
+                    case CheatStep.PullingOut: return HandPose.InPocket;
                     case CheatStep.Returning: return HandPose.FromPocket;
                     default: return HandPose.Rest;
                 }

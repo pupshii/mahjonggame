@@ -35,7 +35,7 @@ namespace MahjongNight.Game
         [Tooltip("How willing bots are to cheat when they see a good swap (0-1).")]
         [SerializeField] private float botNerve = 0.7f;
         [Tooltip("Chance a bot calls out a cheat it has spotted (0-1).")]
-        [SerializeField] private float botSpotChance = 0.9f;
+        [SerializeField] private float botSpotChance = 0.75f;
 
         [Header("Debug")]
         [SerializeField] private bool revealBotHands = false;
@@ -45,7 +45,7 @@ namespace MahjongNight.Game
         private const int HumanSeat = 0;
         private const int FullLogLines = 16;
         private const int StatusLogLines = 3;
-        private const float SpotConeDegrees = 20f;
+        private const float SpotConeDegrees = 15f;
         private const float WatchedConeDegrees = 35f;
         private const float CallOutTargetDegrees = 25f;
 
@@ -92,6 +92,8 @@ namespace MahjongNight.Game
         private float stylesForHeight;
         private GUIStyle boxStyle, textStyle, titleStyle, centerStyle, logStyle, buttonStyle, pickerStyle;
         private bool showFullLog;
+        private Tile? pickedHandTile;     // pocket strip selections (before pressing Swap)
+        private int pickedPocketIndex = -1;
 
         // ------------------------------------------------------------------ lifecycle
 
@@ -167,6 +169,8 @@ namespace MahjongNight.Game
                 cheats[s] = null;
                 brains[s]?.ResetForHand(Time.time);
             }
+            pickedHandTile = null;
+            pickedPocketIndex = -1;
 
             loggedHandEvents = 0;
             resultLines = new List<string>();
@@ -376,15 +380,13 @@ namespace MahjongNight.Game
                 CheatMotion c = cheats[s];
                 if (c == null || !c.InProgress)
                     continue;
-                bool human = s == HumanSeat;
-
                 switch (c.Step)
                 {
                     case CheatStep.Stashing when c.StepTimeUp(now):
-                        c.Begin(human ? CheatStep.ChoosingPocketTile : CheatStep.PullingOut, now);
+                        c.Begin(CheatStep.PullingOut, now);
                         break;
                     case CheatStep.PullingOut when c.StepTimeUp(now):
-                        c.Begin(human ? CheatStep.ReadyToReturn : CheatStep.Returning, now);
+                        c.Begin(CheatStep.Returning, now);
                         break;
                     case CheatStep.Returning when c.StepTimeUp(now):
                         CompleteCheat(c, now);
@@ -521,13 +523,13 @@ namespace MahjongNight.Game
             for (int c = 0; c < HandState.SeatCount; c++)
             {
                 CheatMotion motion = cheats[c];
-                bool exposed = motion != null && motion.Exposed(now);
+                bool moving = motion != null && motion.InProgress; // only the motion itself can be seen
                 for (int w = 0; w < HandState.SeatCount; w++)
                 {
                     BotBrain b = brains[w];
                     if (b == null || w == c)
                         continue;
-                    if (!exposed)
+                    if (!moving)
                     {
                         b.WatchSeconds[c] = 0f;
                         continue;
@@ -975,9 +977,10 @@ namespace MahjongNight.Game
         // ------------------------------------------------------------------ the pocket cheat UI
 
         /// <summary>
-        /// Bottom strip shown while you look down into your lap: the three steps of the swap.
-        /// Each step only starts while you're looking down — and while you are, you can't see
-        /// who's watching you.
+        /// Bottom strip shown while you look down into your lap. Choose a tile from your hand and
+        /// one from your pocket (nobody can see you choosing), then press Swap: the three steps —
+        /// into the pocket, out of the pocket, into your hand — play out as one visible motion.
+        /// You can only act while looking down, and while you are, you can't see who's watching.
         /// </summary>
         private void DrawCheatStrip()
         {
@@ -985,95 +988,94 @@ namespace MahjongNight.Game
             IReadOnlyList<Tile> pocket = match.Players[HumanSeat].Pocket;
             bool down = headLook.LookingDown;
             float now = Time.time;
+            float stepSeconds = StepSeconds(HumanSeat);
+            float buttonH = Unit * 2.6f;
+            bool wasEnabled = GUI.enabled;
 
-            string title;
-            List<string> labels = new List<string>();
-            List<System.Action> actions = new List<System.Action>();
-            string footer = c != null && c.InProgress
-                ? "<color=#ff8080>Anyone watching your hands right now can call you out!</color>"
-                : $"Pocket: {string.Join(" ", pocket)}   ·   Steps take {StepSeconds(HumanSeat):0.0}s each   ·   Caught = pay {matchRules.CheatPenalty} faan to everyone";
-
-            if (c == null || !c.InProgress)
+            if (c != null && c.InProgress)
             {
-                title = "Your pocket — 1) pick a tile from your hand to slip into your pocket";
-                if (Hand.CanPocketSwap(HumanSeat))
-                {
-                    foreach (Tile t in Hand.Seats[HumanSeat].Concealed.Distinct().OrderBy(t => t))
-                    {
-                        Tile tile = t;
-                        labels.Add(PickerLabel(tile));
-                        actions.Add(() => StartCheat(HumanSeat, tile, -1));
-                    }
-                }
-                else
-                {
-                    title = "Your pocket — can't swap right now (you have a claim pending)";
-                }
-            }
-            else
-            {
-                switch (c.Step)
-                {
-                    case CheatStep.Stashing:
-                        title = $"1) Slipping {c.HandTile} into your pocket…  {Mathf.RoundToInt(c.Progress(now) * 100)}%";
-                        break;
-                    case CheatStep.ChoosingPocketTile:
-                        title = down ? "2) Pick a tile to pull out of your pocket" : "2) Look down to reach into your pocket";
-                        for (int i = 0; i < pocket.Count; i++)
-                        {
-                            int index = i;
-                            labels.Add(PickerLabel(pocket[i]));
-                            actions.Add(() =>
-                            {
-                                c.PocketIndex = index;
-                                c.Begin(CheatStep.PullingOut, Time.time);
-                            });
-                        }
-                        break;
-                    case CheatStep.PullingOut:
-                        title = $"2) Pulling {pocket[c.PocketIndex]} out of your pocket…  {Mathf.RoundToInt(c.Progress(now) * 100)}%";
-                        break;
-                    case CheatStep.ReadyToReturn:
-                        title = down ? "3) Slip it into your hand" : "3) Look down to slip it into your hand";
-                        labels.Add($"Slip {pocket[c.PocketIndex]} into your hand");
-                        actions.Add(() => c.Begin(CheatStep.Returning, Time.time));
-                        break;
-                    default:
-                        title = $"3) Slipping {pocket[c.PocketIndex]} into your hand…  {Mathf.RoundToInt(c.Progress(now) * 100)}%";
-                        break;
-                }
+                string step = c.Step == CheatStep.Stashing ? $"1/3  Slipping {c.HandTile} into your pocket…"
+                    : c.Step == CheatStep.PullingOut ? $"2/3  Pulling {pocket[c.PocketIndex]} out of your pocket…"
+                    : $"3/3  Slipping {pocket[c.PocketIndex]} into your hand…";
+                float hMotion = Pad * 2 + LineHeight * 2;
+                Rect rm = Panel(new Rect(Pad, Screen.height - hMotion - Pad, Screen.width - Pad * 2, hMotion));
+                GUI.Label(new Rect(rm.x + Pad, rm.y + Pad, rm.width - Pad * 2, LineHeight),
+                    $"{step}  {Mathf.RoundToInt(c.Progress(now) * 100)}%", titleStyle);
+                GUI.Label(new Rect(rm.x + Pad, rm.y + Pad + LineHeight, rm.width - Pad * 2, LineHeight),
+                    "<color=#ff8080>Your hands are moving — anyone watching them can call you out!</color>", textStyle);
+                return;
             }
 
-            float buttonH = Unit * 2.8f;
-            float h = Pad * 2 + LineHeight * 2 + (labels.Count > 0 ? buttonH + 6 : 0f);
+            bool canSwap = Hand.CanPocketSwap(HumanSeat);
+            List<Tile> handTiles = Hand.Seats[HumanSeat].Concealed.Distinct().OrderBy(t => t).ToList();
+            if (pickedHandTile.HasValue && !handTiles.Contains(pickedHandTile.Value))
+                pickedHandTile = null;
+            if (pickedPocketIndex >= pocket.Count)
+                pickedPocketIndex = -1;
+
+            float h = Pad * 2 + LineHeight * 3 + (buttonH + 6) * 2 + 6;
             Rect r = Panel(new Rect(Pad, Screen.height - h - Pad, Screen.width - Pad * 2, h));
+            float x0 = r.x + Pad;
             float y = r.y + Pad;
-            GUI.Label(new Rect(r.x + Pad, y, r.width - Pad * 2, LineHeight), title, titleStyle);
-            y += LineHeight;
+            float iw = r.width - Pad * 2;
 
-            if (labels.Count > 0)
+            string header = !canSwap
+                ? "Your pocket — can't swap right now (you have a claim pending)"
+                : !down ? "Your pocket — look down (bottom edge) to reach for it"
+                : "Your pocket — pick a tile to put in, a tile to take out, then Swap";
+            GUI.Label(new Rect(x0, y, iw, LineHeight), header, titleStyle);
+            y += LineHeight + 2;
+
+            GUI.enabled = wasEnabled && down && canSwap;
+            Color oldBackground = GUI.backgroundColor;
+
+            // Row 1: hand tiles → pocket
+            GUI.Label(new Rect(x0, y + buttonH / 2f - LineHeight / 2f, Unit * 7, LineHeight), "Hand → pocket:", textStyle);
+            float bw = Mathf.Min(Unit * 5.2f, (iw - Unit * 7) / Mathf.Max(1, handTiles.Count) - 4f);
+            float x = x0 + Unit * 7;
+            foreach (Tile t in handTiles)
             {
-                bool wasEnabled = GUI.enabled;
-                GUI.enabled = down;
-                float bw = Mathf.Min(Unit * 6.5f, (r.width - Pad * 2) / labels.Count - 4f);
-                if (labels.Count == 1)
-                    bw = TextWidth(buttonStyle, labels[0]) + 24;
-                float x = r.center.x - (bw + 4) * labels.Count / 2f;
-                for (int i = 0; i < labels.Count; i++)
-                {
-                    GUIStyle style = labels.Count == 1 ? buttonStyle : pickerStyle;
-                    if (GUI.Button(new Rect(x, y + 4, bw, buttonH), labels[i], style))
-                    {
-                        GUI.enabled = wasEnabled;
-                        actions[i]();
-                        GUIUtility.ExitGUI();
-                    }
-                    x += bw + 4;
-                }
-                GUI.enabled = wasEnabled;
-                y += buttonH + 6;
+                GUI.backgroundColor = pickedHandTile == t ? new Color(1f, 0.85f, 0.3f) : oldBackground;
+                if (GUI.Button(new Rect(x, y, bw, buttonH), PickerLabel(t), pickerStyle))
+                    pickedHandTile = t;
+                x += bw + 4;
             }
-            GUI.Label(new Rect(r.x + Pad, y, r.width - Pad * 2, LineHeight), footer, textStyle);
+            y += buttonH + 6;
+
+            // Row 2: pocket tiles → hand, then the Swap button
+            GUI.Label(new Rect(x0, y + buttonH / 2f - LineHeight / 2f, Unit * 7, LineHeight), "Pocket → hand:", textStyle);
+            x = x0 + Unit * 7;
+            for (int i = 0; i < pocket.Count; i++)
+            {
+                GUI.backgroundColor = pickedPocketIndex == i ? new Color(1f, 0.85f, 0.3f) : oldBackground;
+                if (GUI.Button(new Rect(x, y, bw, buttonH), PickerLabel(pocket[i]), pickerStyle))
+                    pickedPocketIndex = i;
+                x += bw + 4;
+            }
+            GUI.backgroundColor = oldBackground;
+
+            bool ready = pickedHandTile.HasValue && pickedPocketIndex >= 0;
+            string swapLabel = ready
+                ? $"<b>Swap {pickedHandTile.Value} → {pocket[pickedPocketIndex]}</b>  ({stepSeconds * 3f:0.0}s)"
+                : "Swap";
+            GUI.enabled = wasEnabled && down && canSwap && ready;
+            float sw = TextWidth(buttonStyle, swapLabel) + 24;
+            if (GUI.Button(new Rect(x + Unit, y, sw, buttonH), swapLabel, buttonStyle))
+            {
+                GUI.enabled = wasEnabled;
+                Tile tile = pickedHandTile.Value;
+                int index = pickedPocketIndex;
+                pickedHandTile = null;
+                pickedPocketIndex = -1;
+                StartCheat(HumanSeat, tile, index);
+                GUIUtility.ExitGUI();
+            }
+            GUI.enabled = wasEnabled;
+            y += buttonH + 6;
+
+            GUI.Label(new Rect(x0, y, iw, LineHeight),
+                $"Choosing is safe; the swap itself takes {stepSeconds * 3f:0.0}s and can be seen.  Caught = pay {matchRules.CheatPenalty} faan to everyone.  " +
+                "Tip: cheat while a bot is busy with its own turn.", logStyle);
         }
 
         private static string PickerLabel(Tile t) =>

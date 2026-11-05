@@ -42,8 +42,11 @@ namespace MahjongNight.Core
         /// <summary>Seconds for each of the three cheat steps at Sleight of Hand level 0.</summary>
         public const double BaseCheatStepSeconds = 1.2;
 
-        /// <summary>Seconds someone must watch a cheat (Poker Face 0 vs Eagle Eye 0) to spot it.</summary>
-        public const double BaseSpotSeconds = 0.5;
+        /// <summary>
+        /// Seconds of continuous watching needed to spot a cheat (Poker Face 0 vs Eagle Eye 0).
+        /// Longer than a casual glance, so only a lingering look catches you.
+        /// </summary>
+        public const double BaseSpotSeconds = 0.9;
 
         public static readonly Upgrade[] All =
             { Upgrade.SleightOfHand, Upgrade.DeepPockets, Upgrade.PokerFace, Upgrade.EagleEye };

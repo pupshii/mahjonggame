@@ -5,10 +5,16 @@ using UnityEngine;
 namespace MahjongNight.Game
 {
     /// <summary>
-    /// A bot's eyes and nerves: where it looks (the player on turn, its own tiles, the table,
-    /// and — more often — anyone who's been staring down at their lap), when it dares to cheat
-    /// (only when it can see nobody watching), and its pending call-out when it spots a cheat.
+    /// A bot's eyes and nerves: where it looks (its own tiles on its turn, the player on turn,
+    /// the table, short glances at other players — a little more often at anyone who's been
+    /// staring at their lap), when it dares to cheat (only when it can see nobody watching),
+    /// and its pending call-out when it spots a cheat.
     /// </summary>
+    /// <remarks>
+    /// Glances at people are short (0.4–1.0 s) while spotting needs 0.9 s of continuous
+    /// watching, so a cheat is caught by a lingering look, not by every glance. Simulated catch
+    /// rate for an unupgraded 3.6 s swap during a bot's turn: ~1 in 3 (Poker Face 2: ~1 in 25).
+    /// </remarks>
     public sealed class BotBrain
     {
         private readonly SeededRandom rng;
@@ -59,21 +65,22 @@ namespace MahjongNight.Game
         {
             if (now < nextGazeChange)
                 return;
-            nextGazeChange = now + 0.8f + (float)rng.NextDouble() * 1.6f;
 
-            var options = new List<(Vector3 point, float weight, int seat)>
+            bool myTurn = seatOnTurn == Seat;
+            // (point, weight, min seconds, max seconds)
+            var options = new List<(Vector3 point, float weight, float min, float max)>
             {
-                (Vector3.zero, 1.5f, -1),            // the discards in the middle
-                (me.OwnTilesPoint, 2f, -1),           // own tiles
+                (me.DiscardsPoint, 1.5f, 0.8f, 1.6f),                     // the discards (its side of the middle)
+                (me.OwnTilesPoint, myTurn ? 8f : 2f, 1.0f, 2.2f),          // own tiles (busy on its turn)
             };
-            if (seatOnTurn >= 0 && seatOnTurn != Seat)
-                options.Add((all[seatOnTurn].OwnTilesPoint, 3f, seatOnTurn));
+            if (seatOnTurn >= 0 && !myTurn)
+                options.Add((all[seatOnTurn].OwnTilesPoint, 3f, 0.8f, 1.8f));
             foreach (PlayerAvatar other in all)
             {
                 if (other.Seat == Seat)
                     continue;
-                float suspicion = lookingDownFor[other.Seat] > 0.8f ? 4f : 0f;
-                options.Add((other.BodyPoint, 1.2f + suspicion, other.Seat));
+                float suspicion = lookingDownFor[other.Seat] > 1.5f ? 1.5f : 0f;
+                options.Add((other.BodyPoint, 1.2f + suspicion, 0.4f, 1.0f)); // short glance
             }
 
             float total = 0f;
@@ -86,9 +93,11 @@ namespace MahjongNight.Game
                 if (pick <= 0f)
                 {
                     me.LookAt(o.point);
+                    nextGazeChange = now + o.min + (float)rng.NextDouble() * (o.max - o.min);
                     return;
                 }
             }
+            nextGazeChange = now + 1f;
         }
 
         /// <summary>Look down at the pocket while cheating.</summary>
