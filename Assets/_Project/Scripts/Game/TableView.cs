@@ -58,6 +58,9 @@ namespace MahjongNight.Game
         /// <summary>The human's clickable hand tiles from the last rebuild.</summary>
         public IReadOnlyList<TileView> HumanHand => humanHand;
 
+        /// <summary>World point at the top of the human's hand, for placing the action bar above it.</summary>
+        public static Vector3 HumanHandTop => new Vector3(0f, TileFactory.Height + 0.01f, HandZ + 0.02f);
+
         /// <summary>World point above a seat's hand, for placing name tags.</summary>
         public static Vector3 SeatAnchor(int seat, int humanSeat)
         {

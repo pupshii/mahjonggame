@@ -29,7 +29,8 @@ namespace MahjongNight.Game
         [SerializeField] private int seed = 0;
 
         private const int HumanSeat = 0;
-        private const int LogLines = 9;
+        private const int FullLogLines = 16;
+        private const int StatusLogLines = 3;
 
         private RuleSet rules;
         private HandState hand;
@@ -52,7 +53,8 @@ namespace MahjongNight.Game
         private TileView hovered;
         private readonly List<Rect> uiRects = new List<Rect>();
         private float stylesForHeight;
-        private GUIStyle boxStyle, textStyle, titleStyle, buttonStyle;
+        private GUIStyle boxStyle, textStyle, titleStyle, centerStyle, logStyle, buttonStyle;
+        private bool showFullLog;
 
         // ------------------------------------------------------------------ lifecycle
 
@@ -272,6 +274,10 @@ namespace MahjongNight.Game
         }
 
         // ------------------------------------------------------------------ input & UI
+        //
+        // Layout: status + recent log in the top-left corner (floor, not table); bot name tags
+        // float above their hands; the action bar and the result panel sit just above your
+        // hand. Corners near the table edges are left clear because melds and flowers land there.
 
         private void OnGUI()
         {
@@ -280,6 +286,9 @@ namespace MahjongNight.Game
             EnsureStyles();
 
             Event e = Event.current;
+            if (e.type == EventType.Layout)
+                uiRects.Clear();
+
             if (e.type == EventType.MouseMove || e.type == EventType.MouseDown || e.type == EventType.Repaint)
                 UpdateHover(e.mousePosition);
 
@@ -288,25 +297,24 @@ namespace MahjongNight.Game
                 Tile tile = hovered.Tile;
                 e.Use();
                 Apply(PlayerAction.Discard(HumanSeat, tile));
-                GUIUtility.ExitGUI(); // layout changed; abort this GUI pass cleanly
+                GUIUtility.ExitGUI(); // state changed; abort this GUI pass cleanly
             }
 
-            if (e.type == EventType.Layout)
-                uiRects.Clear();
-
             DrawSeatTags();
-            DrawStatus();
-            DrawLog();
+            float statusBottom = DrawStatus();
+            if (showFullLog)
+                DrawFullLog(statusBottom + 8);
             if (hand.Phase == HandPhase.Ended)
                 DrawResult();
             else
-                DrawPrompt();
+                DrawActionBar();
         }
 
         private void UpdateHover(Vector2 guiPosition)
         {
             TileView next = null;
-            if (cam != null && hand.Phase == HandPhase.AwaitingAction && hand.CurrentSeat == HumanSeat)
+            if (cam != null && hand.Phase == HandPhase.AwaitingAction && hand.CurrentSeat == HumanSeat
+                && !uiRects.Any(r => r.Contains(guiPosition)))
             {
                 var screen = new Vector3(guiPosition.x, Screen.height - guiPosition.y, 0f);
                 if (Physics.Raycast(cam.ScreenPointToRay(screen), out RaycastHit hit, 10f))
@@ -334,31 +342,77 @@ namespace MahjongNight.Game
             stylesForHeight = Screen.height;
             int size = Mathf.Max(12, Mathf.RoundToInt(Screen.height / 55f));
 
-            boxStyle = new GUIStyle(GUI.skin.box) { padding = new RectOffset(12, 12, 10, 10) };
-            textStyle = new GUIStyle(GUI.skin.label) { fontSize = size, wordWrap = true, richText = true };
-            titleStyle = new GUIStyle(textStyle) { fontSize = Mathf.RoundToInt(size * 1.25f), fontStyle = FontStyle.Bold };
-            buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = size, padding = new RectOffset(10, 10, 6, 6) };
-        }
-
-        private Rect Panel(float x, float y, float w, float h)
-        {
-            var r = new Rect(x, y, w, h);
-            uiRects.Add(r);
-            GUI.Box(r, GUIContent.none, boxStyle);
-            return new Rect(r.x + 12, r.y + 10, r.width - 24, r.height - 20);
+            boxStyle = new GUIStyle(GUI.skin.box);
+            textStyle = new GUIStyle(GUI.skin.label) { fontSize = size, wordWrap = false, richText = true, clipping = TextClipping.Clip };
+            titleStyle = new GUIStyle(textStyle) { fontSize = Mathf.RoundToInt(size * 1.2f), fontStyle = FontStyle.Bold };
+            centerStyle = new GUIStyle(textStyle) { alignment = TextAnchor.MiddleCenter };
+            logStyle = new GUIStyle(textStyle) { fontSize = Mathf.RoundToInt(size * 0.85f) };
+            logStyle.normal.textColor = new Color(0.75f, 0.75f, 0.75f);
+            buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = size, padding = new RectOffset(12, 12, 6, 6) };
         }
 
         private float Unit => Screen.height / 55f;
+        private float LineHeight => Unit * 1.45f;
+        private const float Pad = 10f;
 
-        private void DrawStatus()
+        /// <summary>Draws a background box, registers it as UI (so clicks don't fall through), returns it.</summary>
+        private Rect Panel(Rect r)
         {
-            Rect inner = Panel(10, 10, Unit * 20, Unit * 6);
-            GUILayout.BeginArea(inner);
-            GUILayout.Label($"Hand {handNumber} · {(classicRules ? "Classic" : "Party")} rules · Wall {hand.Wall.DrawableCount}", textStyle);
+            uiRects.Add(r);
+            GUI.Box(r, GUIContent.none, boxStyle);
+            return r;
+        }
+
+        private float TextWidth(GUIStyle style, string text) => style.CalcSize(new GUIContent(text)).x;
+
+        /// <summary>Screen y (GUI coordinates) of the top of the human's hand.</summary>
+        private float HandTopY()
+        {
+            Vector3 p = cam.WorldToScreenPoint(TableView.HumanHandTop);
+            return Screen.height - p.y;
+        }
+
+        private float DrawStatus()
+        {
+            float w = Unit * 18;
+            int logCount = Mathf.Min(StatusLogLines, log.Count);
+            float buttonH = Unit * 1.8f;
+            float h = Pad * 2 + LineHeight * 3 + logCount * LineHeight * 0.85f + buttonH + 6;
+            Rect r = Panel(new Rect(Pad, Pad, w, h));
+
+            float x = r.x + Pad;
+            float y = r.y + Pad;
+            float iw = r.width - Pad * 2;
+            GUI.Label(new Rect(x, y, iw, LineHeight), $"Hand {handNumber} · {(classicRules ? "Classic" : "Party")} · Wall {hand.Wall.DrawableCount}", textStyle);
+            y += LineHeight;
             string turn = hand.Phase == HandPhase.Ended ? "Hand over" : $"Turn: {SeatName(hand.CurrentSeat)}";
-            GUILayout.Label(turn, textStyle);
-            GUILayout.Label($"{SeatName(HumanSeat)} · wins: {wins[HumanSeat]}", textStyle);
-            GUILayout.EndArea();
+            GUI.Label(new Rect(x, y, iw, LineHeight), turn, textStyle);
+            y += LineHeight;
+            GUI.Label(new Rect(x, y, iw, LineHeight), $"{SeatName(HumanSeat)} · wins {wins[HumanSeat]}", textStyle);
+            y += LineHeight;
+
+            foreach (string line in log.Skip(log.Count - logCount))
+            {
+                GUI.Label(new Rect(x, y, iw, LineHeight * 0.85f), line, logStyle);
+                y += LineHeight * 0.85f;
+            }
+
+            if (GUI.Button(new Rect(x, y + 6, Unit * 7, buttonH), showFullLog ? "Hide log" : "Show log", buttonStyle))
+                showFullLog = !showFullLog;
+            return r.yMax;
+        }
+
+        private void DrawFullLog(float top)
+        {
+            int count = Mathf.Min(FullLogLines, log.Count);
+            float lh = LineHeight * 0.85f;
+            Rect r = Panel(new Rect(Pad, top, Unit * 22, Pad * 2 + count * lh));
+            float y = r.y + Pad;
+            foreach (string line in log.Skip(log.Count - count))
+            {
+                GUI.Label(new Rect(r.x + Pad, y, r.width - Pad * 2, lh), line, logStyle);
+                y += lh;
+            }
         }
 
         /// <summary>Name tags floating above each bot's hand.</summary>
@@ -373,84 +427,76 @@ namespace MahjongNight.Game
                     continue;
                 bool active = hand.Phase != HandPhase.Ended && hand.CurrentSeat == s;
                 string text = $"{(active ? "> " : "")}{SeatName(s)} · wins {wins[s]}";
-                float w = Unit * 11;
-                float h = Unit * 1.9f;
+                GUIStyle style = active ? titleStyle : textStyle;
+                float w = TextWidth(style, text) + Pad * 2;
+                float h = LineHeight + 4;
                 var r = new Rect(p.x - w / 2f, Screen.height - p.y - h / 2f, w, h);
                 GUI.Box(r, GUIContent.none, boxStyle);
-                GUI.Label(new Rect(r.x + 8, r.y + 2, r.width - 16, r.height - 4), text, active ? titleStyle : textStyle);
+                GUI.Label(new Rect(r.x + Pad, r.y + 2, r.width - Pad * 2, r.height - 4), text, style);
             }
         }
 
-        private void DrawLog()
-        {
-            float h = Unit * (LogLines * 1.45f + 1);
-            Rect inner = Panel(10, Screen.height - h - 10, Unit * 20, h);
-            GUILayout.BeginArea(inner);
-            foreach (string line in log.Skip(Mathf.Max(0, log.Count - LogLines)))
-                GUILayout.Label(line, textStyle);
-            GUILayout.EndArea();
-        }
-
-        private void DrawPrompt()
+        /// <summary>One-line prompt plus a row of claim/turn buttons, just above the human's hand.</summary>
+        private void DrawActionBar()
         {
             List<PlayerAction> legal = HumanActions();
-            float w = Unit * 19;
-            float x = Screen.width - w - 10;
+            List<PlayerAction> buttons = legal.Where(a => a.Type != ActionType.Discard).ToList();
 
+            string message;
             if (legal.Count == 0)
-            {
-                Rect waitInner = Panel(x, 10, w, Unit * 2.6f);
-                GUILayout.BeginArea(waitInner);
-                GUILayout.Label($"Waiting for {SeatName(hand.CurrentSeat)}…", textStyle);
-                GUILayout.EndArea();
-                DrawWaitsHint(x, 10 + Unit * 3, w);
-                return;
-            }
-
-            var buttons = legal.Where(a => a.Type != ActionType.Discard).ToList();
-            float h = Unit * (5.5f + buttons.Count * 2.4f);
-            Rect inner = Panel(x, 10, w, h);
-            GUILayout.BeginArea(inner);
-
-            if (hand.Phase == HandPhase.AwaitingAction)
-                GUILayout.Label("Your turn", titleStyle);
+                message = $"Waiting for {SeatName(hand.CurrentSeat)}…";
+            else if (hand.Phase == HandPhase.AwaitingAction)
+                message = "Your turn — click a tile in your hand to discard it";
             else if (hand.Phase == HandPhase.AwaitingRobKong)
-                GUILayout.Label($"{SeatName(hand.CurrentSeat)} is adding to a kong", titleStyle);
+                message = $"{SeatName(hand.CurrentSeat)} is adding to a kong";
             else
-                GUILayout.Label($"{SeatName(hand.LastDiscardSeat)} discarded {hand.LastDiscard}", titleStyle);
+                message = $"{SeatName(hand.LastDiscardSeat)} discarded {hand.LastDiscard}";
+            if (legal.Count > 0 && humanTimeLimit > 0f)
+                message += $"   ({Mathf.CeilToInt(humanTimeLimit - (Time.time - humanWaitStart))}s)";
 
-            if (hand.Phase == HandPhase.AwaitingAction)
-                GUILayout.Label("Click a tile in your hand to discard it.", textStyle);
+            string hint = ReadyHint();
 
-            if (humanTimeLimit > 0f)
-                GUILayout.Label($"{Mathf.CeilToInt(humanTimeLimit - (Time.time - humanWaitStart))}s", textStyle);
+            var labels = buttons.Select(Describe).ToList();
+            var widths = labels.Select(l => TextWidth(buttonStyle, l) + 8).ToList();
+            float gap = 8f;
+            float rowW = widths.Sum() + gap * Mathf.Max(0, widths.Count - 1);
+            float buttonH = Unit * 2.1f;
 
-            foreach (PlayerAction a in buttons)
+            int lines = 1 + (hint != null ? 1 : 0);
+            float w = Mathf.Max(rowW, Mathf.Max(TextWidth(centerStyle, message), hint != null ? TextWidth(centerStyle, hint) : 0f)) + Pad * 2;
+            float h = Pad * 2 + lines * LineHeight + (buttons.Count > 0 ? buttonH + 6 : 0);
+            float bottom = HandTopY() - Unit * 0.4f;
+            Rect r = Panel(new Rect((Screen.width - w) / 2f, bottom - h, w, h));
+
+            float y = r.y + Pad;
+            GUI.Label(new Rect(r.x, y, r.width, LineHeight), message, centerStyle);
+            y += LineHeight;
+            if (hint != null)
             {
-                if (GUILayout.Button(Describe(a), buttonStyle))
-                {
-                    GUILayout.EndArea();
-                    Apply(a);
-                    GUIUtility.ExitGUI();
-                    return;
-                }
+                GUI.Label(new Rect(r.x, y, r.width, LineHeight), hint, centerStyle);
+                y += LineHeight;
             }
-            GUILayout.EndArea();
+
+            float x = r.center.x - rowW / 2f;
+            for (int i = 0; i < buttons.Count; i++)
+            {
+                if (GUI.Button(new Rect(x, y + 6, widths[i], buttonH), labels[i], buttonStyle))
+                {
+                    Apply(buttons[i]);
+                    GUIUtility.ExitGUI();
+                }
+                x += widths[i] + gap;
+            }
         }
 
-        /// <summary>Newbie hint: show which tiles would complete the hand.</summary>
-        private void DrawWaitsHint(float x, float y, float w)
+        /// <summary>Newbie hint: which tiles would complete the hand (only between turns).</summary>
+        private string ReadyHint()
         {
             SeatState me = hand.Seats[HumanSeat];
             if (me.Concealed.Count + 3 * me.Melds.Count != 13)
-                return;
+                return null;
             List<Tile> waits = FaanCalculator.GetWaits(me.Concealed, me.Melds, rules);
-            if (waits.Count == 0)
-                return;
-            Rect inner = Panel(x, y, w, Unit * 2.6f);
-            GUILayout.BeginArea(inner);
-            GUILayout.Label("Ready! Waiting on: " + string.Join(" ", waits), textStyle);
-            GUILayout.EndArea();
+            return waits.Count == 0 ? null : "Ready! Waiting on: " + string.Join(" ", waits);
         }
 
         private string Describe(PlayerAction a)
@@ -474,24 +520,36 @@ namespace MahjongNight.Game
             }
         }
 
+        /// <summary>Hand result above the human's hand, leaving the revealed hands visible.</summary>
         private void DrawResult()
         {
-            float w = Unit * 30;
-            float h = Unit * (4.5f + resultLines.Count * 1.45f);
-            Rect inner = Panel((Screen.width - w) / 2f, Screen.height * 0.12f, w, h);
-            GUILayout.BeginArea(inner);
-            GUILayout.Label(resultLines.Count > 0 ? resultLines[0] : "", titleStyle);
-            foreach (string line in resultLines.Skip(1))
-                GUILayout.Label(line, textStyle);
-            GUILayout.Space(Unit * 0.5f);
-            if (GUILayout.Button("Next hand", buttonStyle))
+            string title = resultLines.Count > 0 ? resultLines[0] : "";
+            List<string> details = resultLines.Skip(1).ToList();
+            const string next = "Next hand";
+
+            float w = Mathf.Max(TextWidth(titleStyle, title), details.Count > 0 ? details.Max(l => TextWidth(textStyle, l)) : 0f);
+            w = Mathf.Min(w + Pad * 2, Screen.width * 0.8f);
+            float buttonH = Unit * 2.1f;
+            float h = Pad * 2 + LineHeight * 1.2f + details.Count * LineHeight + buttonH + 8;
+            float bottom = HandTopY() - Unit * 0.4f;
+            Rect r = Panel(new Rect((Screen.width - w) / 2f, bottom - h, w, h));
+
+            float x = r.x + Pad;
+            float y = r.y + Pad;
+            GUI.Label(new Rect(x, y, r.width - Pad * 2, LineHeight * 1.2f), title, titleStyle);
+            y += LineHeight * 1.2f;
+            foreach (string line in details)
             {
-                GUILayout.EndArea();
+                GUI.Label(new Rect(x, y, r.width - Pad * 2, LineHeight), line, textStyle);
+                y += LineHeight;
+            }
+
+            float bw = TextWidth(buttonStyle, next) + 24;
+            if (GUI.Button(new Rect(r.center.x - bw / 2f, y + 8, bw, buttonH), next, buttonStyle))
+            {
                 NextHand();
                 GUIUtility.ExitGUI();
-                return;
             }
-            GUILayout.EndArea();
         }
     }
 }
