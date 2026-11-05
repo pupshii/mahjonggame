@@ -161,7 +161,7 @@ Peak, Phasmophobia…): fast C# iteration, cheap Steam multiplayer, light builds
 | Netcode | **Netcode for GameObjects (NGO)** | Host-authoritative: one player hosts. FishNet is a solid alternative |
 | Lobbies / invites | Steamworks via **Facepunch.Steamworks** + Facepunch transport for NGO | Steam friend invites, Steam relay = no port forwarding |
 | Voice chat | **Dissonance** (paid asset) or **Vivox** (free tier) | Everyone is at one table, so no proximity voice needed |
-| Physics / ragdoll | Unity physics (PhysX) | Physical tiles, chair tip-overs, pepper-KO ragdolls |
+| Physics / ragdoll | Unity physics (PhysX) | Physical tiles, chair tip-overs when a cheater is caught |
 | Input | Input System package | Mouse/keyboard + controller |
 | UI | uGUI or UI Toolkit | Claim buttons, hints, menus |
 | Tests | Unity Test Framework (NUnit) | EditMode tests for all rules |
