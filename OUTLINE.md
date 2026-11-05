@@ -116,9 +116,17 @@ Note: a hand can be split into melds in several ways (111222333 = three pungs *o
 three chows); the scorer must try every split and take the highest faan.
 
 ### 3.2 Party rule set (tuned for speed and fun)
+
+**Choose your draw (選牌):** instead of drawing blind, the player picks which tile kind they
+want (kong replacements too). The pick succeeds only if a copy is still in the wall; if all
+four are already in hands, melds or discards, the draw fails — the player loses their turn
+(no draw, no discard) and only they learn which tile it was. The picker shows only what the
+player could know (copies they can see, which picks would win), so it's a gamble on what the
+others are holding.
 | Rule | Party default | Classic |
 |---|---|---|
-| Minimum faan to win | 0 (any valid hand) | 3 |
+| Minimum faan to win | 3 | 3 |
+| Drawing | **Choose your draw**: pick any tile kind each turn; if none is left in the wall you lose your turn | Random from the wall |
 | Turn timer | 10 s (auto-discard on timeout) | 20 s |
 | Claim window | 3 s | 5 s |
 | Match structure | Hands until 1 player left | 4 rounds (E/S/W/N) |

@@ -26,7 +26,9 @@ git clone https://github.com/pupshii/mahjonggame.git
 1. Menu bar → **Mahjong Night → Create Greybox Scene** (first time only — creates
    `Assets/_Project/Scenes/Greybox.unity`; commit it). Later: **Mahjong Night → Open Greybox Scene**.
 2. Press **Play**. You sit at the bottom against three bots.
-3. On your turn, **click a tile in your hand** to discard it (it lifts when hovered).
+3. On your turn, first **pick the tile you want to draw** from the menu (party rule). If no copy
+   is left in the wall you get an "Invalid draw" popup and lose your turn. Then **click a tile in
+   your hand** to discard it (it lifts when hovered). Party and Classic both need **3 faan** to win.
    Claim buttons (Win / Pung / Kong / Chow / Pass) appear top-right when you can act.
 4. **Dumpling Roulette:** after each hand the losers eat from the steamer in the middle
    (discarder on a discard win, everyone else on a self-draw, two each for 5+ faan, non-ready

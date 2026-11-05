@@ -27,17 +27,25 @@ namespace MahjongNight.Core
         /// <summary>Allow Seven Pairs (七對) as a winning shape.</summary>
         public bool AllowSevenPairs { get; set; }
 
+        /// <summary>
+        /// Players choose which tile kind to draw each turn (party twist). If no copy of that
+        /// kind is left in the wall, the draw fails and they lose their turn. False = normal
+        /// random draws from the wall.
+        /// </summary>
+        public bool ChooseDraws { get; set; }
+
         /// <summary>Faan value of each pattern.</summary>
         public FaanTable Faan { get; set; } = FaanTable.Default();
 
-        /// <summary>Party mode: any valid hand wins, fun hands allowed.</summary>
+        /// <summary>Party mode: choose your draws, 3 faan to win, fun hands allowed.</summary>
         public static RuleSet Party() => new RuleSet
         {
             DeadWallSize = 0,
             AllowMultipleWinners = false,
-            MinFaan = 0,
+            MinFaan = 3,
             MaxFaan = 10,
             AllowSevenPairs = true,
+            ChooseDraws = true,
         };
 
         /// <summary>Classic Hong Kong table rules: 3 faan minimum, 13 faan limit.</summary>

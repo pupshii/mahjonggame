@@ -16,10 +16,13 @@ namespace MahjongNight.Core.Tests
             for (int step = 0; hand.Phase != HandPhase.Ended; step++)
             {
                 Assert.That(step, Is.LessThan(5000), $"Seed {seed}: hand did not end");
-                int seat = hand.Phase == HandPhase.AwaitingAction ? hand.CurrentSeat : hand.SeatsAwaitingResponse()[0];
+                int seat = hand.SeatToAct();
                 List<PlayerAction> legal = hand.GetLegalActions(seat);
                 PlayerAction action = bots[seat].Choose(hand, seat, legal);
                 Assert.That(legal, Has.Member(action), $"Seed {seed}: bot chose an illegal action");
+                if (action.Type == ActionType.Draw)
+                    Assert.That(hand.VisibleKindCounts(seat)[action.Tile.KindIndex], Is.LessThan(4),
+                        "Bot picked a tile it can see all four copies of");
                 hand.Apply(action);
 
                 List<string> problems = HandInvariants.Check(hand);
@@ -31,13 +34,16 @@ namespace MahjongNight.Core.Tests
         [Test]
         public void BotsPlayCompleteHands_AndWinOften()
         {
-            int wins = 0;
-            const int hands = 100;
-            for (ulong seed = 1; seed <= hands; seed++)
-                if (PlayBotHand(seed, RuleSet.Party()).Result.Outcome == HandOutcome.Win)
-                    wins++;
-            TestContext.WriteLine($"Bot wins: {wins}/{hands}");
-            Assert.That(wins, Is.GreaterThan(hands / 4), "Bots should usually finish a hand under party rules");
+            foreach (RuleSet rules in new[] { RuleSet.Party(), TestRules.RandomDraws() })
+            {
+                int wins = 0;
+                const int hands = 60;
+                for (ulong seed = 1; seed <= hands; seed++)
+                    if (PlayBotHand(seed, rules).Result.Outcome == HandOutcome.Win)
+                        wins++;
+                TestContext.WriteLine($"Bot wins ({(rules.ChooseDraws ? "chosen" : "random")} draws, min {rules.MinFaan}): {wins}/{hands}");
+                Assert.That(wins, Is.GreaterThan(hands / 4), "Bots should usually finish a hand");
+            }
         }
 
         [Test]
@@ -74,7 +80,8 @@ namespace MahjongNight.Core.Tests
             Assert.That(preview.Concealed, Has.Count.EqualTo(14));
             Assert.That(hand.PreviewWin(1), Is.Null, "Not seat 1's turn");
             bool canWin = hand.GetLegalActions(0).Contains(PlayerAction.SelfDrawnWin(0));
-            Assert.That(FaanCalculator.Calculate(preview, hand.Rules) != null, Is.EqualTo(canWin));
+            FaanResult score = FaanCalculator.Calculate(preview, hand.Rules);
+            Assert.That(score != null && score.Total >= hand.Rules.MinFaan, Is.EqualTo(canWin));
         }
     }
 }

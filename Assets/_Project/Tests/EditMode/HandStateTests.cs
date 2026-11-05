@@ -247,7 +247,7 @@ namespace MahjongNight.Core.Tests
         [TestCase(true, new[] { 1, 3 })]
         public void SimultaneousWins_FollowMultipleWinnerRule(bool allowMultiple, int[] expectedWinners)
         {
-            var rules = RuleSet.Party();
+            var rules = TestRules.RandomDraws();
             rules.AllowMultipleWinners = allowMultiple;
             HandState hand = TestWall.Deal(Hands(s0: ChowDealer,
                     s1: "3B 4B 6B 7B 5D 8D 2C 9C 9C E S W GD",
@@ -392,7 +392,7 @@ namespace MahjongNight.Core.Tests
         [Test]
         public void ExhaustedWall_EndsInDrawGame()
         {
-            var rules = RuleSet.Party();
+            var rules = TestRules.RandomDraws();
             rules.DeadWallSize = 144 - 53; // nothing drawable after the deal
             HandState hand = TestWall.Deal(Hands(), rules: rules);
             hand.Apply(PlayerAction.Discard(0, Tile.Dots(1)));

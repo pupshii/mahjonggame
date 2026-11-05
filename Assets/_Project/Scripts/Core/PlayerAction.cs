@@ -9,6 +9,7 @@ namespace MahjongNight.Core
         ConcealedKong,  // 暗槓 four of a kind from the hand
         PromoteKong,    // 加槓 add a tile to an exposed pung
         SelfDrawnWin,   // 自摸
+        Draw,           // choose the tile kind to draw (RuleSet.ChooseDraws)
 
         // Responding to someone else's discard (or promoted kong)
         Pass,
@@ -19,7 +20,7 @@ namespace MahjongNight.Core
     }
 
     /// <summary>
-    /// Something a player wants to do. <see cref="Tile"/> is the tile for Discard /
+    /// Something a player wants to do. <see cref="Tile"/> is the tile for Discard / Draw /
     /// ConcealedKong / PromoteKong, the lowest tile of the sequence for Chow, and unused
     /// (default) for the rest.
     /// </summary>
@@ -40,6 +41,7 @@ namespace MahjongNight.Core
         public static PlayerAction ConcealedKong(int seat, Tile tile) => new PlayerAction(seat, ActionType.ConcealedKong, tile);
         public static PlayerAction PromoteKong(int seat, Tile tile) => new PlayerAction(seat, ActionType.PromoteKong, tile);
         public static PlayerAction SelfDrawnWin(int seat) => new PlayerAction(seat, ActionType.SelfDrawnWin);
+        public static PlayerAction Draw(int seat, Tile kind) => new PlayerAction(seat, ActionType.Draw, kind);
         public static PlayerAction Pass(int seat) => new PlayerAction(seat, ActionType.Pass);
         public static PlayerAction Chow(int seat, Tile lowest) => new PlayerAction(seat, ActionType.Chow, lowest);
         public static PlayerAction Pung(int seat) => new PlayerAction(seat, ActionType.Pung);

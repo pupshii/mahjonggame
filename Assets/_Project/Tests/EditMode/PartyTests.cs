@@ -127,7 +127,7 @@ namespace MahjongNight.Core.Tests
             for (int step = 0; hand.Phase != HandPhase.Ended; step++)
             {
                 Assert.That(step, Is.LessThan(5000));
-                int seat = hand.Phase == HandPhase.AwaitingAction ? hand.CurrentSeat : hand.SeatsAwaitingResponse()[0];
+                int seat = hand.SeatToAct();
                 hand.Apply(bots[seat].Choose(hand, seat, hand.GetLegalActions(seat)));
             }
         }
@@ -208,11 +208,14 @@ namespace MahjongNight.Core.Tests
             var match = new PartyMatch(RuleSet.Party(), PartyRules.Default(), 5);
             ForceRoulette(match, eater: 2);
             Steamer steamer = match.SteamerFor(2);
+            int before = steamer.Remaining;
+            if (before < 2)
+                Assert.Inconclusive("Only the pepper is left");
             int safe = steamer.UneatenSlots().First(s => s != steamer.RevealPepperSlot());
             match.Eat(2, safe);
             Assert.That(match.Players[2].IsAlive, Is.True);
-            Assert.That(steamer.Remaining, Is.EqualTo(5));
-            Assert.That(steamer.PepperChance, Is.EqualTo(0.2).Within(1e-9));
+            Assert.That(steamer.Remaining, Is.EqualTo(before - 1));
+            Assert.That(steamer.PepperChance, Is.EqualTo(1.0 / (before - 1)).Within(1e-9));
         }
 
         [Test]

@@ -48,6 +48,7 @@ namespace MahjongNight.Game
         private PartyMatch match;
         private HandState Hand => match.Hand;
         private readonly IBot[] bots = new IBot[HandState.SeatCount];
+        private IBot humanAutoBot; // plays for you when your timer runs out
         private SeededRandom seedSource;
         private SeededRandom botDumplingPicker;
 
@@ -67,12 +68,15 @@ namespace MahjongNight.Game
         private List<string> resultLines = new List<string>();
         private string penaltyLine;
         private string rouletteLine;
+        private string popupTitle;
+        private string popupText;
+        private float popupUntil;
 
         private TileView hoveredTile;
         private DumplingView hoveredDumpling;
         private readonly List<Rect> uiRects = new List<Rect>();
         private float stylesForHeight;
-        private GUIStyle boxStyle, textStyle, titleStyle, centerStyle, logStyle, buttonStyle;
+        private GUIStyle boxStyle, textStyle, titleStyle, centerStyle, logStyle, buttonStyle, pickerStyle;
         private bool showFullLog;
 
         // ------------------------------------------------------------------ lifecycle
@@ -141,6 +145,7 @@ namespace MahjongNight.Game
             ulong botSeed = seedSource.NextUInt64();
             for (int s = 0; s < bots.Length; s++)
                 bots[s] = new SimpleBot(botSeed + (ulong)s * 7919UL);
+            humanAutoBot = new SimpleBot(botSeed ^ 0xA070UL);
 
             loggedHandEvents = 0;
             resultLines = new List<string>();
@@ -192,7 +197,7 @@ namespace MahjongNight.Game
             if (Time.time < nextBotTime)
                 return;
 
-            if (Hand.Phase == HandPhase.AwaitingAction)
+            if (Hand.Phase == HandPhase.AwaitingAction || Hand.Phase == HandPhase.AwaitingDraw)
             {
                 if (!HumanPlays(Hand.CurrentSeat))
                     BotAct(Hand.CurrentSeat);
@@ -226,7 +231,11 @@ namespace MahjongNight.Game
         {
             List<PlayerAction> legal = HumanActions();
             PlayerAction action;
-            if (Hand.Phase == HandPhase.AwaitingAction)
+            if (Hand.Phase == HandPhase.AwaitingDraw)
+            {
+                action = humanAutoBot.Choose(Hand, HumanSeat, legal);
+            }
+            else if (Hand.Phase == HandPhase.AwaitingAction)
             {
                 PlayerAction drawnDiscard = Hand.LastDrawnTile.HasValue
                     ? PlayerAction.Discard(HumanSeat, Hand.LastDrawnTile.Value)
@@ -256,7 +265,10 @@ namespace MahjongNight.Game
             FlushHandEvents();
             hoveredTile = null;
             humanWaitStart = Time.time;
-            nextBotTime = Time.time + Pace * (Hand.Phase == HandPhase.AwaitingAction ? botTurnDelay : botClaimDelay);
+            float delay = Hand.Phase == HandPhase.AwaitingAction ? botTurnDelay
+                : Hand.Phase == HandPhase.AwaitingDraw ? botTurnDelay * 0.6f
+                : botClaimDelay;
+            nextBotTime = Time.time + Pace * delay;
             if (Hand.Phase == HandPhase.Ended && match.Phase == MatchPhase.PlayingHand)
                 OnHandEnded();
             table.Rebuild(Hand, HumanSeat, revealBotHands);
@@ -380,6 +392,15 @@ namespace MahjongNight.Game
                     case BonusTileRevealedEvent b:
                         AddLog($"{SeatName(b.Seat)} reveals {b.Tile}");
                         break;
+                    case DrawFailedEvent f when f.Seat == HumanSeat && HumanPlays(HumanSeat):
+                        AddLog($"You tried to draw {f.Tile} — none left. Turn lost.");
+                        ShowPopup("Invalid draw!",
+                            $"There are no {LongName(f.Tile)} left in the wall —\n" +
+                            "they're all in other hands or on the table.\nYou lose your turn.");
+                        break;
+                    case DrawFailedEvent f:
+                        AddLog($"{SeatName(f.Seat)} reached for a tile that wasn't there — turn lost.");
+                        break;
                     case TileDiscardedEvent t:
                         AddLog($"{SeatName(t.Seat)} discards {t.Tile}");
                         break;
@@ -485,9 +506,16 @@ namespace MahjongNight.Game
             if (showFullLog)
                 DrawFullLog(statusBottom + 8);
             if (match.Phase == MatchPhase.PlayingHand && Hand.Phase != HandPhase.Ended)
+            {
                 DrawActionBar();
+                if (Hand.Phase == HandPhase.AwaitingDraw && HumanPlays(Hand.CurrentSeat))
+                    DrawPicker();
+            }
             else
+            {
                 DrawResult();
+            }
+            DrawPopup();
         }
 
         private void UpdateHover(Vector2 guiPosition)
@@ -547,6 +575,14 @@ namespace MahjongNight.Game
             logStyle = new GUIStyle(textStyle) { fontSize = Mathf.RoundToInt(size * 0.85f) };
             logStyle.normal.textColor = new Color(0.75f, 0.75f, 0.75f);
             buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = size, padding = new RectOffset(12, 12, 6, 6) };
+            pickerStyle = new GUIStyle(GUI.skin.button)
+            {
+                fontSize = Mathf.RoundToInt(size * 0.8f),
+                richText = true,
+                wordWrap = false,
+                alignment = TextAnchor.MiddleCenter,
+                padding = new RectOffset(2, 2, 2, 2),
+            };
         }
 
         private float Unit => Screen.height / 55f;
@@ -661,11 +697,13 @@ namespace MahjongNight.Game
         private void DrawActionBar()
         {
             List<PlayerAction> legal = HumanActions();
-            List<PlayerAction> buttons = legal.Where(a => a.Type != ActionType.Discard).ToList();
+            List<PlayerAction> buttons = legal.Where(a => a.Type != ActionType.Discard && a.Type != ActionType.Draw).ToList();
 
             string message;
             if (legal.Count == 0)
                 message = $"Waiting for {SeatName(Hand.CurrentSeat)}…";
+            else if (Hand.Phase == HandPhase.AwaitingDraw)
+                message = "Your turn — pick the tile you want to draw";
             else if (Hand.Phase == HandPhase.AwaitingAction)
                 message = "Your turn — click a tile in your hand to discard it";
             else if (Hand.Phase == HandPhase.AwaitingRobKong)
@@ -712,6 +750,123 @@ namespace MahjongNight.Game
                 case ActionType.PromoteKong: return $"Add to kong {a.Tile}";
                 case ActionType.Pass: return "Pass";
                 default: return a.ToString();
+            }
+        }
+
+        // ------------------------------------------------------------------ chosen draws
+
+        /// <summary>
+        /// The draw menu: one button per tile kind. Shows only what you could know yourself —
+        /// copies you can see (your hand + the table) and which picks would win — never the wall.
+        /// </summary>
+        private void DrawPicker()
+        {
+            int[] seen = Hand.VisibleKindCounts(HumanSeat);
+            var gone = new HashSet<Tile>(Hand.Events.OfType<DrawFailedEvent>()
+                .Where(f => f.Seat == HumanSeat).Select(f => f.Tile));
+
+            float cell = Unit * 3.1f;
+            const float gap = 5f;
+            float gridW = 9 * cell + 8 * gap;
+            string title = $"Choose your draw   ({SecondsLeft()}s)";
+            const string sub = "Pick a tile you think is still in the wall. If none are left, you lose your turn.";
+            const string legend = "<color=#8f8>Green</color> = wins your hand   ·   Grey = all 4 accounted for (or already came up empty)";
+            float w = Mathf.Max(gridW, TextWidth(textStyle, sub)) + Pad * 2;
+            float h = Pad * 2 + LineHeight * 1.2f + LineHeight * 2 + 4 * (cell + gap) + 4;
+            Rect r = Panel(new Rect((Screen.width - w) / 2f, Screen.height * 0.1f, w, h));
+
+            float x0 = r.x + (r.width - gridW) / 2f;
+            float y = r.y + Pad;
+            GUI.Label(new Rect(r.x + Pad, y, r.width - Pad * 2, LineHeight * 1.2f), title, titleStyle);
+            y += LineHeight * 1.2f;
+            GUI.Label(new Rect(r.x + Pad, y, r.width - Pad * 2, LineHeight), sub, textStyle);
+            y += LineHeight + 4;
+
+            Color oldBackground = GUI.backgroundColor;
+            for (int k = 0; k < TileSet.PlayableKindCount; k++)
+            {
+                Tile t = Tile.FromKindIndex(k);
+                int row = k < 27 ? k / 9 : 3;
+                int col = k < 27 ? k % 9 : k - 27;
+                var b = new Rect(x0 + col * (cell + gap), y + row * (cell + gap), cell, cell);
+
+                FaanResult win = FaanCalculator.Calculate(Hand.PreviewDraw(HumanSeat, t), rules);
+                bool wins = win != null && win.Total >= rules.MinFaan;
+                bool hopeless = seen[k] >= TileSet.CopiesPerPlayableKind || gone.Contains(t);
+
+                GUI.backgroundColor = wins ? new Color(0.35f, 1f, 0.35f) : hopeless ? new Color(0.45f, 0.45f, 0.45f) : oldBackground;
+                string label = $"<color={PickerColor(t)}><b>{TileFactory.LabelFor(t).Replace("\n", " ")}</b></color>\n" +
+                    (gone.Contains(t) ? "none left" : $"seen {seen[k]}/4") + (wins ? $"\n<color=#ff0>WIN {win.Total}</color>" : "");
+                if (GUI.Button(b, label, pickerStyle))
+                {
+                    GUI.backgroundColor = oldBackground;
+                    Apply(PlayerAction.Draw(HumanSeat, t));
+                    GUIUtility.ExitGUI();
+                }
+            }
+            GUI.backgroundColor = oldBackground;
+            GUI.Label(new Rect(r.x + Pad, y + 4 * (cell + gap), r.width - Pad * 2, LineHeight), legend, textStyle);
+        }
+
+        /// <summary>Bright text colours that read on the dark default buttons.</summary>
+        private static string PickerColor(Tile t)
+        {
+            switch (t.Suit)
+            {
+                case TileSuit.Dots: return "#8cb8ff";
+                case TileSuit.Bamboo: return "#8ee69a";
+                case TileSuit.Characters: return "#ff8c8c";
+                case TileSuit.Dragon: return t.Rank == 1 ? "#ff6b6b" : t.Rank == 2 ? "#6be36b" : "#b8ccff";
+                default: return "#ffffff";
+            }
+        }
+
+        private static string LongName(Tile t)
+        {
+            switch (t.Suit)
+            {
+                case TileSuit.Dots: return $"{t.Rank} Dots";
+                case TileSuit.Bamboo: return $"{t.Rank} Bamboo";
+                case TileSuit.Characters: return $"{t.Rank} Characters";
+                case TileSuit.Wind: return new[] { "East", "South", "West", "North" }[t.Rank - 1] + " Winds";
+                case TileSuit.Dragon: return new[] { "Red", "Green", "White" }[t.Rank - 1] + " Dragons";
+                default: return t.ToString();
+            }
+        }
+
+        private void ShowPopup(string title, string text)
+        {
+            popupTitle = title;
+            popupText = text;
+            popupUntil = Time.time + 4f;
+        }
+
+        /// <summary>Centred notice (e.g. invalid draw); closes itself after a few seconds.</summary>
+        private void DrawPopup()
+        {
+            if (popupText == null || Time.time > popupUntil)
+                return;
+            string[] lines = popupText.Split('\n');
+            float w = Mathf.Max(TextWidth(titleStyle, popupTitle), lines.Max(l => TextWidth(centerStyle, l))) + Pad * 4;
+            float buttonH = Unit * 2.1f;
+            float h = Pad * 2 + LineHeight * 1.3f + lines.Length * LineHeight + buttonH + 10;
+            Rect r = Panel(new Rect((Screen.width - w) / 2f, Screen.height * 0.32f, w, h));
+            Panel(r); // drawn twice for a more opaque box
+
+            float y = r.y + Pad;
+            var titleCentered = new GUIStyle(titleStyle) { alignment = TextAnchor.MiddleCenter };
+            GUI.Label(new Rect(r.x, y, r.width, LineHeight * 1.3f), $"<color=#ff7070>{popupTitle}</color>", titleCentered);
+            y += LineHeight * 1.3f;
+            foreach (string line in lines)
+            {
+                GUI.Label(new Rect(r.x, y, r.width, LineHeight), line, centerStyle);
+                y += LineHeight;
+            }
+            float bw = Unit * 6;
+            if (GUI.Button(new Rect(r.center.x - bw / 2f, y + 6, bw, buttonH), "OK", buttonStyle))
+            {
+                popupText = null;
+                GUIUtility.ExitGUI();
             }
         }
 

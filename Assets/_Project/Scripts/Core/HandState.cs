@@ -28,6 +28,7 @@ namespace MahjongNight.Core
         private int discardCount;
         private bool mustDiscardOnly;          // after claiming a chow/pung
         private bool lastDrawWasKongReplacement;
+        private bool pendingKongReplacement;   // during AwaitingDraw: this draw replaces a kong
         private Tile pendingKongTile;          // during AwaitingRobKong
 
         private HandState(RuleSet rules, int dealer, Wind prevailingWind, Wall wall, IWinValidator winValidator)
@@ -117,6 +118,12 @@ namespace MahjongNight.Core
                         AddTurnActions(seats[seat], actions);
                     break;
 
+                case HandPhase.AwaitingDraw:
+                    if (seat == CurrentSeat)
+                        for (int k = 0; k < TileSet.PlayableKindCount; k++)
+                            actions.Add(PlayerAction.Draw(seat, Tile.FromKindIndex(k)));
+                    break;
+
                 case HandPhase.AwaitingClaims:
                     if (seat != LastDiscardSeat && responses[seat] == null)
                         AddClaimActions(seats[seat], actions);
@@ -155,6 +162,67 @@ namespace MahjongNight.Core
             }
         }
 
+        /// <summary>
+        /// The hand <paramref name="seat"/> would have if their chosen draw of
+        /// <paramref name="tile"/> succeeded, as a self-drawn win context — for showing which
+        /// picks would win. Null unless <paramref name="seat"/> is choosing a draw. Doesn't
+        /// reveal whether the tile is actually available.
+        /// </summary>
+        public WinContext PreviewDraw(int seat, Tile tile)
+        {
+            if (Phase != HandPhase.AwaitingDraw || seat != CurrentSeat)
+                return null;
+            WinContext c = BaseContext(seat, new List<Tile>(seats[seat].concealed) { tile });
+            c.WinningTile = tile;
+            c.SelfDrawn = true;
+            c.KongReplacement = pendingKongReplacement;
+            c.LastTile = Wall.DrawablePlayableCount <= 1;
+            c.HeavenlyHand = false;
+            return c;
+        }
+
+        /// <summary>
+        /// Copies of each playable kind that <paramref name="seat"/> can see: their own
+        /// concealed tiles plus every meld and discard on the table. Public knowledge only —
+        /// safe for bots and UI hints.
+        /// </summary>
+        public int[] VisibleKindCounts(int seat)
+        {
+            var counts = new int[TileSet.PlayableKindCount];
+            foreach (Tile t in seats[seat].concealed)
+                if (!t.IsBonus)
+                    counts[t.KindIndex]++;
+            foreach (SeatState s in seats)
+            {
+                foreach (Meld m in s.melds)
+                    foreach (Tile t in m.Tiles)
+                        counts[t.KindIndex]++;
+                foreach (Tile t in s.discards)
+                    counts[t.KindIndex]++;
+            }
+            return counts;
+        }
+
+        /// <summary>
+        /// The seat whose input the hand is waiting on next: the current seat when it must act or
+        /// choose a draw, otherwise the first seat that still owes a claim response. -1 once ended.
+        /// </summary>
+        public int SeatToAct()
+        {
+            switch (Phase)
+            {
+                case HandPhase.AwaitingAction:
+                case HandPhase.AwaitingDraw:
+                    return CurrentSeat;
+                case HandPhase.AwaitingClaims:
+                case HandPhase.AwaitingRobKong:
+                    List<int> waiting = SeatsAwaitingResponse();
+                    return waiting.Count > 0 ? waiting[0] : -1;
+                default:
+                    return -1;
+            }
+        }
+
         /// <summary>Seats that still owe a response in the current claim window.</summary>
         public List<int> SeatsAwaitingResponse()
         {
@@ -178,7 +246,7 @@ namespace MahjongNight.Core
             if (mustDiscardOnly)
                 return;
 
-            if (Wall.CanDraw)
+            if (CanDrawAny())
             {
                 foreach (Tile t in seen)
                     if (seat.CountConcealed(t) == 4)
@@ -205,7 +273,7 @@ namespace MahjongNight.Core
             int have = seat.CountConcealed(discard);
             if (have >= 2)
                 actions.Add(PlayerAction.Pung(s));
-            if (have == 3 && Wall.CanDraw)
+            if (have == 3 && CanDrawAny())
                 actions.Add(PlayerAction.Kong(s));
 
             if (s == NextSeat(LastDiscardSeat) && discard.IsSuited)
@@ -243,7 +311,7 @@ namespace MahjongNight.Core
                 Concealed = concealed,
                 Melds = s.melds.ToArray(),
                 Bonus = s.bonus.ToArray(),
-                LastTile = !Wall.CanDraw,
+                LastTile = !CanDrawAny(),
             };
         }
 
@@ -296,6 +364,9 @@ namespace MahjongNight.Core
                 case ActionType.PromoteKong:
                     DoPromoteKong(action.Seat, action.Tile);
                     break;
+                case ActionType.Draw:
+                    DoChosenDraw(action.Seat, action.Tile);
+                    break;
                 case ActionType.SelfDrawnWin:
                     EndWithWin(new[] { action.Seat }, new[] { SelfDrawnContext(action.Seat) }, -1, LastDrawnTile,
                         selfDrawn: true, robbedKong: false, kongReplacement: lastDrawWasKongReplacement);
@@ -328,6 +399,26 @@ namespace MahjongNight.Core
             events.Add(new TileDiscardedEvent(seat, tile));
             OpenResponseWindow(HandPhase.AwaitingClaims);
         }
+
+        private void DoChosenDraw(int seat, Tile kind)
+        {
+            if (Wall.TryTake(kind))
+            {
+                seats[seat].concealed.Add(kind);
+                LastDrawnTile = kind;
+                lastDrawWasKongReplacement = pendingKongReplacement;
+                events.Add(new TileDrawnEvent(seat, kind, fromBack: pendingKongReplacement));
+                Phase = HandPhase.AwaitingAction;
+            }
+            else
+            {
+                events.Add(new DrawFailedEvent(seat, kind));
+                StartTurn(NextSeat(seat), kongReplacement: false);
+            }
+        }
+
+        /// <summary>Whether any draw is still possible (random or chosen).</summary>
+        private bool CanDrawAny() => Rules.ChooseDraws ? Wall.DrawablePlayableCount > 0 : Wall.CanDraw;
 
         private void DoConcealedKong(int seat, Tile tile)
         {
@@ -489,11 +580,26 @@ namespace MahjongNight.Core
             Phase = HandPhase.AwaitingAction;
         }
 
-        /// <summary>Gives <paramref name="seat"/> the turn and draws a tile (or ends the hand if the wall is empty).</summary>
+        /// <summary>
+        /// Gives <paramref name="seat"/> the turn and draws a tile — or, with chosen draws, asks them
+        /// which kind to draw. Ends the hand if the wall is empty.
+        /// </summary>
         private void StartTurn(int seat, bool kongReplacement)
         {
             CurrentSeat = seat;
             mustDiscardOnly = false;
+            if (Rules.ChooseDraws)
+            {
+                LastDrawnTile = null;
+                if (!CanDrawAny())
+                {
+                    EndAsDraw();
+                    return;
+                }
+                pendingKongReplacement = kongReplacement;
+                Phase = HandPhase.AwaitingDraw;
+                return;
+            }
             if (!DrawInto(seat, fromBack: kongReplacement))
                 return;
             lastDrawWasKongReplacement = kongReplacement;
@@ -533,7 +639,7 @@ namespace MahjongNight.Core
         {
             Phase = HandPhase.Ended;
             Result = new HandResult(HandOutcome.Win, winners, contexts, discarder, tile, selfDrawn, robbedKong,
-                kongReplacementWin: selfDrawn && kongReplacement, lastTileWin: !Wall.CanDraw);
+                kongReplacementWin: selfDrawn && kongReplacement, lastTileWin: !CanDrawAny());
             events.Add(new HandEndedEvent(Result));
         }
 

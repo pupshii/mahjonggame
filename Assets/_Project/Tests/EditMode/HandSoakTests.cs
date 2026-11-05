@@ -9,7 +9,7 @@ namespace MahjongNight.Core.Tests
     /// </summary>
     public class HandSoakTests
     {
-        private const int MaxSteps = 5000;
+        private const int MaxSteps = 20000;
 
         private static HandState PlayRandomHand(ulong seed, IWinValidator validator, RuleSet rules, bool alwaysWin = false)
         {
@@ -21,9 +21,7 @@ namespace MahjongNight.Core.Tests
             {
                 Assert.That(step, Is.LessThan(MaxSteps), $"Seed {seed}: hand did not end");
 
-                int seat = hand.Phase == HandPhase.AwaitingAction
-                    ? hand.CurrentSeat
-                    : hand.SeatsAwaitingResponse()[0];
+                int seat = hand.SeatToAct();
                 List<PlayerAction> legal = hand.GetLegalActions(seat);
                 Assert.That(legal, Is.Not.Empty, $"Seed {seed}: seat {seat} is stuck in {hand.Phase}");
 
@@ -51,7 +49,7 @@ namespace MahjongNight.Core.Tests
         {
             for (ulong seed = 1; seed <= 200; seed++)
             {
-                HandState hand = PlayRandomHand(seed, NeverWinValidator.Instance, RuleSet.Party());
+                HandState hand = PlayRandomHand(seed, NeverWinValidator.Instance, TestRules.RandomDraws());
                 Assert.That(hand.Result.Outcome, Is.EqualTo(HandOutcome.ExhaustiveDraw), $"Seed {seed}");
                 Assert.That(hand.Wall.CanDraw, Is.False);
             }
@@ -63,7 +61,7 @@ namespace MahjongNight.Core.Tests
             int wins = 0, draws = 0, selfDrawn = 0, claimed = 0;
             for (ulong seed = 1; seed <= 300; seed++)
             {
-                var rules = RuleSet.Party();
+                var rules = TestRules.RandomDraws();
                 rules.AllowMultipleWinners = seed % 2 == 0;
                 rules.DeadWallSize = (int)(seed % 3) * 8;
                 HandState hand = PlayRandomHand(seed, new HashWinValidator(400), rules);

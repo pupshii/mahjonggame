@@ -69,6 +69,7 @@ namespace MahjongNight.Core
                 case HandPhase.AwaitingRobKong:
                     return seat == hand.CurrentSeat ? 14 : 13;
                 case HandPhase.AwaitingClaims:
+                case HandPhase.AwaitingDraw:
                     return 13;
                 case HandPhase.Ended:
                     if (hand.Result.Outcome == HandOutcome.ExhaustiveDraw)

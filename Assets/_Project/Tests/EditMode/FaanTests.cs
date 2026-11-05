@@ -371,7 +371,10 @@ namespace MahjongNight.Core.Tests
             WinContext twoFaan = Ctx(ChickenHand, bonus: "F3");
             Assert.That(Score(twoFaan).Total, Is.EqualTo(2));
             Assert.That(new FaanWinValidator(RuleSet.Classic()).IsWinningHand(twoFaan), Is.False, "Classic needs 3");
-            Assert.That(new FaanWinValidator(RuleSet.Party()).IsWinningHand(twoFaan), Is.True, "Party needs 0");
+            Assert.That(new FaanWinValidator(RuleSet.Party()).IsWinningHand(twoFaan), Is.False, "Party needs 3");
+            RuleSet anything = RuleSet.Party();
+            anything.MinFaan = 0;
+            Assert.That(new FaanWinValidator(anything).IsWinningHand(twoFaan), Is.True, "0 minimum");
             Assert.That(new FaanWinValidator(RuleSet.Classic()).IsWinningHand(Ctx(ChickenHand)), Is.True);
         }
 
@@ -427,12 +430,15 @@ namespace MahjongNight.Core.Tests
         }
 
         [Test]
-        public void IncompleteHand_CannotDeclareWin()
+        public void SelfDrawnWin_IsLegalExactlyWhenWorthMinimumFaan()
         {
-            HandState hand = HandState.Deal(RuleSet.Party(), 0, Wind.East, 1234);
-            WinContext ctx = new WinContext { Concealed = hand.Seats[0].Concealed };
-            bool complete = FaanCalculator.Calculate(ctx, hand.Rules) != null;
-            Assert.That(hand.GetLegalActions(0).Any(a => a.Type == ActionType.SelfDrawnWin), Is.EqualTo(complete));
+            for (ulong seed = 1; seed <= 200; seed++)
+            {
+                HandState hand = HandState.Deal(RuleSet.Party(), 0, Wind.East, seed);
+                FaanResult score = FaanCalculator.Calculate(hand.PreviewWin(0), hand.Rules);
+                bool worth = score != null && score.Total >= hand.Rules.MinFaan;
+                Assert.That(hand.GetLegalActions(0).Any(a => a.Type == ActionType.SelfDrawnWin), Is.EqualTo(worth), $"seed {seed}");
+            }
         }
     }
 }

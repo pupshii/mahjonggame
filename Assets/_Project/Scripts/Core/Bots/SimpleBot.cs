@@ -36,6 +36,9 @@ namespace MahjongNight.Core
 
             SeatState me = hand.Seats[seat];
 
+            if (hand.Phase == HandPhase.AwaitingDraw)
+                return ChooseDraw(hand, me, legal);
+
             if (hand.Phase == HandPhase.AwaitingAction)
             {
                 foreach (PlayerAction a in legal)
@@ -63,6 +66,107 @@ namespace MahjongNight.Core
                         .First();
             }
             return pass;
+        }
+
+        // ------------------------------------------------------------------ chosen draws
+
+        /// <summary>
+        /// Picks the tile kind with the best expected gain: (chance a copy is still in the wall)
+        /// × (how much it improves the hand). Uses only public information — the bot's own
+        /// tiles, everything on the table, and the wall's size — never the wall itself.
+        /// </summary>
+        private PlayerAction ChooseDraw(HandState hand, SeatState me, IReadOnlyList<PlayerAction> legal)
+        {
+            int[] visible = hand.VisibleKindCounts(me.Seat);
+            int hiddenInHands = 0;
+            int revealedBonus = 0;
+            foreach (SeatState s in hand.Seats)
+            {
+                revealedBonus += s.Bonus.Count;
+                if (s.Seat != me.Seat)
+                    hiddenInHands += s.Concealed.Count;
+            }
+            int wallPlayable = Math.Max(0, hand.Wall.Remaining - (TileSet.BonusKindCount - revealedBonus) - hand.Rules.DeadWallSize);
+
+            // Our own failed picks this hand prove those kinds are gone from the wall for good.
+            var knownGone = new HashSet<Tile>();
+            foreach (HandEvent e in hand.Events)
+                if (e is DrawFailedEvent f && f.Seat == me.Seat)
+                    knownGone.Add(f.Tile);
+
+            var current = new List<Tile>(me.Concealed);
+            double currentValue = HandValue(current, hand, me);
+
+            PlayerAction best = legal[0];
+            double bestScore = double.MinValue;
+            double bestChance = -1;
+
+            foreach (PlayerAction a in legal)
+            {
+                if (a.Type != ActionType.Draw)
+                    continue;
+                int unseen = TileSet.CopiesPerPlayableKind - visible[a.Tile.KindIndex];
+                double chance = knownGone.Contains(a.Tile) ? 0 : ChanceInWall(unseen, hiddenInHands, wallPlayable);
+                if (chance <= 0)
+                    continue;
+
+                double gain;
+                WinContext win = hand.PreviewDraw(me.Seat, a.Tile);
+                FaanResult score = win != null ? FaanCalculator.Calculate(win, hand.Rules) : null;
+                if (score != null && score.Total >= hand.Rules.MinFaan)
+                {
+                    gain = 1000 + score.Total;
+                }
+                else
+                {
+                    current.Add(a.Tile);
+                    gain = BestValueAfterDiscard(current, hand, me) - currentValue;
+                    current.RemoveAt(current.Count - 1);
+                }
+
+                double expected = chance * gain + 0.001 * chance; // tie-break: safer picks
+                if (expected > bestScore || (expected == bestScore && chance > bestChance))
+                {
+                    bestScore = expected;
+                    bestChance = chance;
+                    best = a;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Probability that at least one of <paramref name="unseen"/> copies is in the wall rather
+        /// than in other players' hands (hypergeometric), given the hidden tile counts.
+        /// </summary>
+        public static double ChanceInWall(int unseen, int hiddenInHands, int wallPlayable)
+        {
+            if (unseen <= 0 || wallPlayable <= 0)
+                return 0;
+            double allInHands = 1;
+            for (int i = 0; i < unseen; i++)
+            {
+                double inHands = hiddenInHands - i;
+                double total = hiddenInHands + wallPlayable - i;
+                if (inHands <= 0 || total <= 0)
+                    return 1;
+                allInHands *= inHands / total;
+            }
+            return 1 - allInHands;
+        }
+
+        private static double BestValueAfterDiscard(List<Tile> fourteen, HandState hand, SeatState me)
+        {
+            double best = double.MinValue;
+            var seen = new HashSet<Tile>();
+            foreach (Tile t in fourteen)
+            {
+                if (!seen.Add(t))
+                    continue;
+                List<Tile> rest = Without(fourteen, t, 1);
+                best = Math.Max(best, HandValue(rest, hand, me));
+            }
+            return best;
         }
 
         // ------------------------------------------------------------------ discards

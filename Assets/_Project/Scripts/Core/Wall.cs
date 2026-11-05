@@ -67,6 +67,50 @@ namespace MahjongNight.Core
             return tiles[--back];
         }
 
+        /// <summary>
+        /// Copies of <paramref name="kind"/> that could still be drawn (outside the dead wall).
+        /// Host-only information — never give this to players or bots.
+        /// </summary>
+        public int CountAvailable(Tile kind)
+        {
+            int n = 0;
+            for (int i = front; i < back - DeadWallSize; i++)
+                if (tiles[i] == kind)
+                    n++;
+            return n;
+        }
+
+        /// <summary>Playable (non-bonus) tiles that could still be drawn by choice.</summary>
+        public int DrawablePlayableCount
+        {
+            get
+            {
+                int n = 0;
+                for (int i = front; i < back - DeadWallSize; i++)
+                    if (!tiles[i].IsBonus)
+                        n++;
+                return n;
+            }
+        }
+
+        /// <summary>
+        /// Takes one copy of <paramref name="kind"/> from anywhere in the drawable wall
+        /// (chosen-draw rule). False if none is left.
+        /// </summary>
+        public bool TryTake(Tile kind)
+        {
+            for (int i = front; i < back - DeadWallSize; i++)
+            {
+                if (tiles[i] != kind)
+                    continue;
+                tiles[i] = tiles[front];
+                tiles[front] = kind;
+                front++;
+                return true;
+            }
+            return false;
+        }
+
         /// <summary>Tiles still in the wall, front to back. Host-only information.</summary>
         public IEnumerable<Tile> RemainingTiles()
         {

@@ -31,6 +31,21 @@ namespace MahjongNight.Core
         public override string ToString() => $"Seat{Seat} draws {Tile}{(FromBack ? " (replacement)" : "")}";
     }
 
+    /// <summary>
+    /// A chosen draw failed: no copy of <see cref="Tile"/> was left in the wall, so the player
+    /// loses their turn. Private: others only learn that the draw failed, not which tile.
+    /// </summary>
+    public sealed class DrawFailedEvent : HandEvent
+    {
+        public DrawFailedEvent(int seat, Tile tile) : base(seat)
+        {
+            Tile = tile;
+        }
+
+        public Tile Tile { get; }
+        public override string ToString() => $"Seat{Seat} tries to draw {Tile} — none left, turn lost";
+    }
+
     /// <summary>A flower or season was set aside (public).</summary>
     public sealed class BonusTileRevealedEvent : HandEvent
     {

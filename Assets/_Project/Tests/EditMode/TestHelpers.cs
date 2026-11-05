@@ -4,6 +4,18 @@ using System.Linq;
 
 namespace MahjongNight.Core.Tests
 {
+    internal static class TestRules
+    {
+        /// <summary>Party rules with normal random draws and no minimum faan — for scripted walls.</summary>
+        public static RuleSet RandomDraws()
+        {
+            RuleSet r = RuleSet.Party();
+            r.ChooseDraws = false;
+            r.MinFaan = 0;
+            return r;
+        }
+    }
+
     /// <summary>Builds rigged walls so tests can choose exact starting hands and draws.</summary>
     internal static class TestWall
     {
@@ -70,7 +82,7 @@ namespace MahjongNight.Core.Tests
             IWinValidator validator = null, RuleSet rules = null, int dealer = 0)
         {
             // Scenario tests script their wins explicitly, so default to no wins at all.
-            return HandState.DealFromWall(rules ?? RuleSet.Party(), dealer, Wind.East,
+            return HandState.DealFromWall(rules ?? TestRules.RandomDraws(), dealer, Wind.East,
                 Build(dealer, hands, frontDraws, backDraws), validator ?? NeverWinValidator.Instance);
         }
     }
