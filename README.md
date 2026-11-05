@@ -4,7 +4,7 @@
 Design and roadmap: [OUTLINE.md](OUTLINE.md).
 
 ## Requirements
-- **Unity Hub** + a **Unity 6** editor (latest LTS recommended).
+- **Unity Hub** + **Unity 6.3 LTS** (project uses `6000.3.11f1`; any newer 6000.3.x patch is fine).
 - **Git LFS** — run `git lfs install` once before cloning.
 - An IDE: JetBrains Rider or Visual Studio Code (with the Unity extension).
 
