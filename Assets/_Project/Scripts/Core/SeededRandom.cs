@@ -28,6 +28,9 @@ namespace MahjongNight.Core
             }
         }
 
+        /// <summary>Uniform double in [0, 1).</summary>
+        public double NextDouble() => (NextUInt64() >> 11) * (1.0 / (1UL << 53));
+
         /// <summary>Uniform integer in [0, maxExclusive), without modulo bias.</summary>
         public int NextInt(int maxExclusive)
         {

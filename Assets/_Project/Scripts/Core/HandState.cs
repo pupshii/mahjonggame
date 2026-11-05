@@ -134,6 +134,27 @@ namespace MahjongNight.Core
             return actions;
         }
 
+        /// <summary>
+        /// The hand <paramref name="seat"/> would win with right now (self-drawn on their turn, or
+        /// on the current discard / kong being promoted), for previewing faan in the UI.
+        /// Null if there is nothing to win on. Says nothing about legality — check
+        /// <see cref="GetLegalActions"/> for a Win / SelfDrawnWin action.
+        /// </summary>
+        public WinContext PreviewWin(int seat)
+        {
+            switch (Phase)
+            {
+                case HandPhase.AwaitingAction:
+                    return seat == CurrentSeat && !mustDiscardOnly ? SelfDrawnContext(seat) : null;
+                case HandPhase.AwaitingClaims:
+                    return seat != LastDiscardSeat && LastDiscard.HasValue ? ClaimContext(seat, LastDiscard.Value, robbedKong: false) : null;
+                case HandPhase.AwaitingRobKong:
+                    return seat != CurrentSeat ? ClaimContext(seat, pendingKongTile, robbedKong: true) : null;
+                default:
+                    return null;
+            }
+        }
+
         /// <summary>Seats that still owe a response in the current claim window.</summary>
         public List<int> SeatsAwaitingResponse()
         {
