@@ -134,42 +134,56 @@ a pure one suit is a gamble that can wipe the table.
 
 ## 4. Tech Plan
 
-### 4.1 Stack (recommended)
+### 4.1 Stack
 | Area | Choice | Notes |
 |---|---|---|
-| Engine | **Unity 6 (C#)** | Most common choice for indie 3D party games; huge asset/tutorial base |
-| Netcode | Netcode for GameObjects *or* FishNet | Host-authoritative (one player hosts) |
-| Lobbies / invites | Steamworks (Facepunch.Steamworks) | Steam friends invite, relay = no port forwarding |
-| Voice chat | Vivox or Steam Voice | Proximity not needed — everyone's at one table |
-| Physics / ragdoll | Unity physics | Tiles are physical objects for "juice" |
-
-Alternative: **Godot 4** (free, open source) if you'd rather avoid Unity.
+| Engine | **Unreal Engine 5 (C++ + Blueprints)** | Game rules in C++; feel, animation, and UI wiring in Blueprints |
+| Netcode | Unreal replication, **listen server** | One player hosts; built into the engine, no extra library |
+| Lobbies / invites | Online Subsystem **Steam** + Steam Sockets | Steam friend invites, Steam relay = no port forwarding |
+| Voice chat | Built-in Unreal VOIP over OSS Steam | Everyone is at one table, so no proximity voice needed. Vivox / EOS Voice as fallback |
+| Physics / ragdoll | Chaos physics + Physics Assets | Physical tiles, chair tip-overs, pepper-KO ragdolls |
+| UI | UMG + Common UI | Claim buttons, hints, menus; gamepad-friendly |
+| Input | Enhanced Input | Mouse/keyboard + controller |
+| Audio | MetaSounds | Tile clacks, heartbeat, layered voice lines |
+| Version control | Git + **Git LFS** (for `.uasset` / `.umap`) | Switch to Perforce if the team grows |
 
 ### 4.2 Architecture
-- **Pure C# game engine** (separate assembly, no `UnityEngine` reference): tiles,
-  wall, turns, claims, win detection, faan, party rules. Fully unit-tested, deterministic,
-  seeded RNG.
-- **Host-authoritative:** only the host runs the engine. Clients send *intents*
-  ("discard 5 Bamboo", "accuse player 3"); the host validates and broadcasts results.
-- **Hidden information:** clients only receive their own hand + public info, so a
-  modded client can't see other hands or the wall.
-- **Presentation layer** listens to engine events and plays animations/sound
-  (tile slides, slams, roulette, ragdolls). The engine never waits on animation.
+- **`MahjongCore` C++ module** — plain C++ (no `UObject`s, no networking): tiles, wall,
+  turns, claims, win detection, faan, party rules. Deterministic with seeded RNG,
+  covered by Unreal Automation tests. Same "pure engine" idea as before, so rules
+  can be tested without launching the game.
+- **Server-authoritative gameplay framework:**
+  | Unreal class | Lives on | Responsibility |
+  |---|---|---|
+  | `AMahjongGameMode` | Server only | Owns the `MahjongCore` match, runs turns, timers, roulette |
+  | `AMahjongGameState` | Replicated to all | Public info: discards, exposed melds, whose turn, steamer, lives |
+  | `AMahjongPlayerState` | Replicated | Seat, character, lives; **concealed hand replicated `COND_OwnerOnly`** |
+  | `AMahjongPlayerController` | Owning client | Sends intents via Server RPCs (`ServerDiscard`, `ServerClaim`, `ServerAccuse`, `ServerCheat`) |
+  | `AMahjongSeatPawn` | Replicated | First-person camera; head look direction replicated (needed for cheat detection) |
+  | `AMahjongTable` | Replicated | 3D tile actors, steamer, table props |
+- **Hidden information:** other players' hands and the wall never leave the server,
+  so a modded client can't see them.
+- **Presentation reacts to events:** core fires events (`OnTileDiscarded`,
+  `OnPung`, `OnRouletteResult`…) → Blueprints play animations and sounds. Rules
+  never wait on animations.
 
 ### 4.3 Project layout
 ```
-Assets/_Project/
-  Scripts/
-    Engine/        Pure C#: Tiles, Wall, Hand, Actions, GameState, RuleSet
-    Scoring/       Decomposition, Faan detectors, Payout
-    Party/         Lives, Dumpling Roulette, Cheats, Accusations
-    Bots/          Bot players (fill empty seats, practice mode)
-    Net/           Lobby, Steam, message types, host/client sync
-    Table/         3D table, tile objects, seat cameras, look-direction sync
-    Characters/    Animation controllers, voice lines, ragdoll
-    UI/            Claim buttons, hand hints, menus, settings
-  Art/  Audio/  Prefabs/  Scenes/
-Tests/EditMode/    NUnit tests for Engine, Scoring, Party
+MahjongNight.uproject
+Source/
+  MahjongCore/          Pure C++ rules: Tiles, Wall, Hand, Actions, MatchState, RuleSet,
+                        Scoring (Decompose, Faan, Payout), Party (Lives, Roulette, Cheats)
+    Tests/              Automation tests (MahjongCore.*)
+  MahjongNight/         Game module: GameMode, GameState, PlayerState, Controller,
+                        SeatPawn, Table, Bots, Steam session/lobby code
+Content/
+  Core/                 Blueprint subclasses, data assets (RuleSet presets, faan table)
+  Characters/           Meshes, anim blueprints, voice lines, physics assets
+  Environment/          Parlour map, props, lighting
+  Tiles/                Tile mesh, material instances per tile face
+  UI/                   UMG / Common UI widgets
+  Audio/                MetaSounds, SFX
+Config/                 DefaultEngine.ini (Steam OSS, net settings), DefaultGame.ini
 ```
 
 ---
@@ -189,11 +203,11 @@ Tests/EditMode/    NUnit tests for Engine, Scoring, Party
 
 | # | Milestone | Done when |
 |---|---|---|
-| M0 | Setup | Unity project, Git LFS, engine assembly, test runner green |
+| M0 | Setup | UE5 C++ project, Git LFS + Unreal `.gitignore`, `MahjongCore` module, automation tests green |
 | M1 | Engine core | Tiles, wall, dealing, flowers, turn loop, claims — headless tests pass |
 | M2 | Win & faan | Win detection + faan calculator with tests for every pattern |
 | M3 | Greybox table | Single player vs 3 bots in a 3D greybox room, playable start to finish |
-| M4 | Multiplayer | Steam lobby, 2–4 players online, host-authoritative, bots fill seats |
+| M4 | Multiplayer | Steam lobby, 2–4 players online, listen server, bots fill seats |
 | M5 | Party layer | Lives, Dumpling Roulette, eliminations, ghost spectators |
 | M6 | Cheat & accuse | Cheats, look-direction sync, accusation flow |
 | M7 | Characters & voice | 4 characters, animations, voice lines, voice chat, emotes |
@@ -206,16 +220,15 @@ bots and placeholder cubes, art won't save it.
 ---
 
 ## 7. Testing
-- Unit tests for every faan pattern and tricky decompositions.
+- Automation tests for every faan pattern and tricky decompositions.
 - Invariant checks: 144 tiles always accounted for; no duplicates across zones.
 - Bot-vs-bot soak tests: thousands of simulated hands to catch illegal states.
-- Network tests: two local instances via ParrelSync; latency/disconnect simulation.
+- Network tests: Play-In-Editor with multiple clients; `Net PktLag` / `PktLoss` to simulate bad connections; disconnect/rejoin.
 - Weekly friend playtests from M5 onward — measure laughs, not just bugs.
 
 ---
 
 ## 8. Open Questions
-- Unity or Godot?
 - Cheating in v1, or ship roulette-only first and add cheats as an update?
 - Shared steamer vs personal steamers?
 - Art direction: low-poly clean, or crunchy PSX-style?
