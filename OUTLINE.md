@@ -205,7 +205,7 @@ ProjectSettings/   (committed)
 | M0 ✅ | Setup | Unity 6 project, Git LFS + Unity `.gitignore`, `MahjongCore` assembly, EditMode tests green |
 | M1 ✅ | Engine core | Tiles, wall, dealing, flowers, turn loop, claims — headless tests pass |
 | M2 ✅ | Win & faan | Win detection + faan calculator with tests for every pattern |
-| M3 | Greybox table | Single player vs 3 bots in a 3D greybox room, playable start to finish |
+| M3 ✅ | Greybox table | Single player vs 3 bots in a 3D greybox room, playable start to finish |
 | M4 | Multiplayer | Steam lobby, 2–4 players online, host-authoritative NGO, bots fill seats |
 | M5 | Party layer | Lives, Dumpling Roulette, eliminations, ghost spectators |
 | M6 | Cheat & accuse | Cheats, look-direction sync, accusation flow |

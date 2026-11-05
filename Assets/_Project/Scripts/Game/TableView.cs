@@ -146,14 +146,13 @@ namespace MahjongNight.Game
             Quaternion flat = Quaternion.Euler(90f, 0f, 0f);
             float y = TileFactory.Depth / 2f;
 
+            // Melds stack leftwards from the player's right, but each meld reads left to right.
             foreach (Meld meld in s.Melds)
             {
-                foreach (Tile t in meld.Tiles)
-                {
-                    x -= Spacing;
-                    Place(t, true, frame, new Vector3(x, y, MeldZ), flat);
-                }
-                x -= 0.012f;
+                int n = meld.Tiles.Count;
+                for (int i = 0; i < n; i++)
+                    Place(meld.Tiles[i], true, frame, new Vector3(x - (n - i) * Spacing, y, MeldZ), flat);
+                x -= n * Spacing + 0.012f;
             }
             foreach (Tile t in s.Bonus)
             {

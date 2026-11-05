@@ -211,10 +211,7 @@ namespace MahjongNight.Game
                 int winner = result.Winners[i];
                 wins[winner]++;
                 FaanResult score = FaanCalculator.Calculate(result.WinContexts[i], rules);
-                string how = result.SelfDrawn ? "self-drawn"
-                    : result.RobbedKong ? $"robbing {SeatName(result.Discarder)}'s kong"
-                    : $"on {SeatName(result.Discarder)}'s discard";
-                resultLines.Add($"{SeatName(winner)} wins {how} with {result.WinningTile} — {score.Total} faan" +
+                resultLines.Add($"{DescribeWin(result, winner)} — {score.Total} faan" +
                     (score.IsLimit ? " (LIMIT!)" : ""));
                 foreach (FaanItem item in score.Items)
                     resultLines.Add($"    {item}   {FaanPatterns.ChineseName(item.Pattern)}");
@@ -225,6 +222,18 @@ namespace MahjongNight.Game
             // Dealer keeps the deal when they win (or on a draw); otherwise it passes on.
             nextDealer = result.Winners.Contains(dealer) ? dealer : HandState.NextSeat(dealer);
         }
+
+        /// <summary>"Bot 2 (West) wins on your discard with 6C".</summary>
+        private string DescribeWin(HandResult result, int winner)
+        {
+            string how = result.SelfDrawn ? "self-drawn"
+                : result.RobbedKong ? $"by robbing {Possessive(result.Discarder)} kong"
+                : $"on {Possessive(result.Discarder)} discard";
+            string verb = winner == HumanSeat ? "win" : "wins";
+            return $"{SeatName(winner)} {verb} {how} with {result.WinningTile}";
+        }
+
+        private string Possessive(int seat) => seat == HumanSeat ? "your" : SeatName(seat) + "'s";
 
         private void NextHand()
         {
@@ -267,7 +276,11 @@ namespace MahjongNight.Game
                         AddLog($"{SeatName(m.Seat)}: {m.Meld}");
                         break;
                     case HandEndedEvent h:
-                        AddLog(h.ToString());
+                        if (h.Result.Outcome == HandOutcome.ExhaustiveDraw)
+                            AddLog("Draw game — the wall is empty.");
+                        else
+                            foreach (int w in h.Result.Winners)
+                                AddLog(DescribeWin(h.Result, w));
                         break;
                 }
             }
