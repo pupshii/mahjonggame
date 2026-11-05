@@ -4,10 +4,10 @@
 Design and roadmap: [OUTLINE.md](OUTLINE.md).
 
 ## Requirements
-- **Unreal Engine 5.6** (Epic Games Launcher). A newer 5.x works too: right-click
+- **Unreal Engine 5.8** (Epic Games Launcher). Another 5.x works too: right-click
   `MahjongNight.uproject` → *Switch Unreal Engine version…*
 - **Windows:** Visual Studio 2022 with the *Game development with C++* workload
-  (or JetBrains Rider). **macOS:** Xcode.
+  (or JetBrains Rider). **macOS:** the Xcode version Epic lists for your engine version.
 - **Git LFS** — run `git lfs install` once before cloning.
 
 ## First-time setup
