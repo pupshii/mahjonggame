@@ -1,189 +1,222 @@
-# Hong Kong Mahjong — Project Outline
+# Mahjong Night (working title) — Project Outline
 
-A digital version of Hong Kong (Cantonese) mahjong: 4 players, 144 tiles,
-scoring in *faan* (番), with a configurable minimum faan to win.
+A **3D online party game** built on **Hong Kong mahjong**. 2–4 friends sit around a
+table in a smoky back-alley Hong Kong mahjong parlour (麻雀館), talk trash over
+voice chat, cheat when nobody is looking — and whoever loses a hand has to eat a
+dumpling from the steamer… one of which is a ghost-pepper bomb.
 
----
+Genre: cheap, chaotic, streamer-friendly "party slop" — short sessions, physical
+comedy, social tension, easy to pick up even if you've never played mahjong.
 
-## 1. Game Rules (what the engine must model)
-
-### 1.1 Tiles (144 total)
-| Group | Tiles | Copies | Count |
-|---|---|---|---|
-| Dots / Circles (筒) | 1–9 | ×4 | 36 |
-| Bamboo (索) | 1–9 | ×4 | 36 |
-| Characters (萬) | 1–9 | ×4 | 36 |
-| Winds (風) | East, South, West, North | ×4 | 16 |
-| Dragons (三元) | Red 中, Green 發, White 白 | ×4 | 12 |
-| Flowers (花) | Plum, Orchid, Chrysanthemum, Bamboo (1–4) | ×1 | 4 |
-| Seasons (季) | Spring, Summer, Autumn, Winter (1–4) | ×1 | 4 |
-
-Flowers/seasons are bonus tiles: set aside when drawn, replaced from the back of the wall.
-
-### 1.2 Setup
-- 4 seats: East (dealer/莊), South, West, North.
-- Prevailing wind (圈風) starts at East; a full game = 4 rounds (East, South, West, North), each with ≥4 hands.
-- Shuffle, build wall, roll dice to pick the break point.
-- Deal 13 tiles each; dealer takes a 14th and discards first.
-- Replace any flowers/seasons in the starting hands.
-
-### 1.3 Turn flow
-1. Draw a tile (or claim the previous discard).
-2. Optionally declare a concealed kong / promote a pung to a kong (draw replacement tile).
-3. Declare self-drawn win (自摸) **or** discard one tile.
-4. Other players get a window to claim the discard.
-
-### 1.4 Claims & priority
-| Claim | Who | Meld |
-|---|---|---|
-| Win (食糊) | Anyone | Completes hand |
-| Kong (槓) | Anyone | 3 in hand + discard |
-| Pung (碰) | Anyone | 2 in hand + discard |
-| Chow (上) | **Next player only** | Sequence of 3 |
-
-Priority: **Win > Kong/Pung > Chow**. Multiple winners on one discard → configurable
-(nearest player in turn order wins, or allow multiple).
-Robbing the kong (搶槓): others may win off a tile used to promote a pung to a kong.
-
-### 1.5 Winning hand
-- Standard: 4 melds (pung/kong/chow) + 1 pair.
-- Special hands: Thirteen Orphans (十三么); Seven Pairs (七對) as an optional house rule.
-- Must meet the **minimum faan** (commonly 3; configurable 0–3).
-
-### 1.6 End of hand & dealer rotation
-- Dealer wins or hand is a draw (流局) → dealer stays (連莊).
-- Otherwise → dealer passes to the next player (South becomes East, etc.).
-- After every seat has dealt once, prevailing wind advances.
-- Draw game: wall runs out (keep a configurable dead wall of tiles).
+> All characters, setting, art, and the penalty mechanic are our own. We take
+> inspiration from the genre (online table game + voice chat + high-stakes penalty),
+> not from any specific game's content.
 
 ---
 
-## 2. Scoring (Faan 番)
+## 1. Core Concept
 
-Faan values vary by table; ship a sensible default and make every value configurable.
+### 1.1 Pitch pillars
+1. **Real mahjong, fast.** Genuine HK rules underneath, but tuned for 3–5 minute hands.
+2. **Social chaos.** Voice chat, cheating, accusations, emotes, slamming tiles.
+3. **Stakes you can laugh at.** Dumpling Roulette — lose a hand, risk a spicy knockout.
+4. **Readable for newbies.** Claim buttons light up, hand-value hints, auto-sort.
 
-### 2.1 Common faan (default values)
+### 1.2 Match loop
+```
+Lobby (Steam invite) → pick character → sit at table
+   └─► Play a hand of mahjong (party rules)
+         └─► Losers face Dumpling Roulette
+               ├─ safe dumpling   → keep playing
+               └─ ghost pepper    → KO'd (ragdoll, fire breath) → become a ghost spectator
+   └─► Repeat until one player is left → winner gets the golden mahjong tile
+```
+Target match length: **15–25 minutes**.
+
+### 1.3 Dumpling Roulette (penalty)
+- A bamboo steamer sits in the middle of the table with **6 dumplings**; one is the ghost pepper.
+- After each hand, every *loser* (see 3.2) must pick a dumpling and eat it on camera.
+- Eaten safe dumplings are **not** replaced, so the odds get worse for everyone as the match goes on.
+- Eat the pepper → knocked out. The steamer is refilled for the remaining players.
+- Optional variant: each player has their own steamer (personal risk instead of shared).
+
+### 1.4 Cheating & Accusing (the "liar" layer)
+Mahjong parlours are famous for cheats, so cheating is a mechanic:
+- Once per hand, each player may **cheat**: swap a hand tile with the wall,
+  peek at the next draw, or palm a discard back.
+- Cheating plays a visible hand animation. **Other players' look direction is
+  networked**, so you can only cheat safely when nobody is looking at your hands.
+- Anyone can hit **Accuse (出千!)** on a player:
+  - Correct → the cheater eats a dumpling immediately.
+  - Wrong → the accuser eats one.
+- This creates staring contests, distraction tactics over voice chat, and bluffing.
+
+### 1.5 Modes
+| Mode | Description |
+|---|---|
+| **Party** (default) | Fast rules + Dumpling Roulette + cheating |
+| **Party (no cheats)** | Roulette only — for groups who just want mahjong + stakes |
+| **Classic** | Full HK rules, full 4-round game, points scoring, no penalties |
+| **Practice** | Solo vs bots with tutorial hints |
+
+---
+
+## 2. Characters & Setting
+
+### 2.1 Setting
+- A cramped, neon-lit 1980s–90s HK mahjong parlour: flickering fluorescent tube,
+  ceiling fan, cigarette haze, a TV playing static, milk tea cups on the table,
+  a window view of a rainy street with neon signs.
+- Low-poly / slightly crunchy art style: cheap to produce, reads well on stream.
+- Later maps: rooftop under the neon, a cha chaan teng after closing, a junk boat in the harbour.
+
+### 2.2 Character concepts (original cast, placeholders)
+| Character | Gimmick |
+|---|---|
+| **Auntie Perm** | Hair curlers, gold bangles, shouts every claim |
+| **Roast Goose** | A literal roast goose in a vest; drips when nervous |
+| **Pineapple Bun** | Crumbly bun guy, flakes on the table when he slams tiles |
+| **Koi Uncle** | Lucky koi fish in a singlet and flip-flops, always "lucky" |
+
+Each character: idle/fidget animations, claim voice lines (碰! 上! 槓! 食糊!),
+reaction to eating a pepper, unique tile-slam style. Cosmetics are a later goal.
+
+---
+
+## 3. Game Rules
+
+### 3.1 Hong Kong mahjong basics (the engine models all of this)
+
+**Tiles (144):** Dots, Bamboo, Characters 1–9 (×4 each), Winds E/S/W/N (×4),
+Dragons Red/Green/White (×4), Flowers 1–4 and Seasons 1–4 (×1 each). Flowers and
+seasons are bonus tiles, set aside and replaced from the back of the wall.
+
+**Turn:** draw (or claim the last discard) → optional kong → self-draw win or discard.
+
+**Claims & priority:** Win (食糊) > Kong (槓) / Pung (碰) > Chow (上, next player only).
+Robbing the kong (搶槓) allowed.
+
+**Winning hand:** 4 melds + 1 pair, or special hands (Thirteen Orphans; Seven Pairs optional).
+
+**Faan (番) scoring — defaults, all configurable:**
 | Pattern | Faan |
 |---|---|
-| Self-drawn (自摸) | 1 |
-| Concealed hand, won on discard (門前清) | 1 |
-| No flowers (無花) | 1 |
-| Own flower / own season (正花) | 1 each |
-| Full set of 4 flowers or 4 seasons (一台花) | 2 |
-| Pung of dragons | 1 each |
-| Pung of seat wind (門風) | 1 |
-| Pung of prevailing wind (圈風) | 1 |
-| All chows (平糊) | 1 |
-| Win on last tile (海底撈月) | 1 |
-| Win on kong replacement (槓上開花) | 1 |
-| Robbing the kong (搶槓) | 1 |
-| All pungs (對對糊) | 3 |
-| Mixed one suit (混一色) | 3 |
+| Self-drawn (自摸), Concealed (門前清), No flowers (無花) | 1 each |
+| Own flower / season | 1 each |
+| Pung of dragon / seat wind / prevailing wind | 1 each |
+| All chows (平糊), Last tile (海底撈月), Kong replacement (槓上開花), Robbing kong (搶槓) | 1 each |
+| Full flower or season set (一台花) | 2 |
+| All pungs (對對糊), Mixed one suit (混一色) | 3 each |
 | Seven pairs (七對) *(optional)* | 4 |
 | Small three dragons (小三元) | 5 |
 | Pure one suit (清一色) | 7 |
+| Limit hands: Big three dragons, Small/Big four winds, All honours, All terminals, Thirteen orphans, Nine gates, Four concealed pungs, Four kongs, Heavenly/Earthly hand | Max |
 
-### 2.2 Limit hands (爆棚 / max faan)
-Big three dragons (大三元), Small four winds (小四喜), Big four winds (大四喜),
-All honours (字一色), All terminals (清么九), Thirteen orphans (十三么),
-Nine gates (九子連環), Four concealed pungs (坑坑糊), Four kongs (十八羅漢),
-Heavenly hand (天糊), Earthly hand (地糊), all 8 flowers (八仙過海).
+Note: a hand can be split into melds in several ways (111222333 = three pungs *or*
+three chows); the scorer must try every split and take the highest faan.
 
-### 2.3 Payout
-- Faan → points via a lookup table (roughly doubling per faan, capped at the limit,
-  e.g. 10 or 13 faan). Support named tables like "half-spicy" (半辣) / "full-spicy" (全辣).
-- **Win on discard:** discarder pays (optionally: discarder pays double, others pay single).
-- **Self-drawn:** all three others pay.
-- Optional rules: responsibility payment (包) for feeding a limit hand, etc.
+### 3.2 Party rule set (tuned for speed and fun)
+| Rule | Party default | Classic |
+|---|---|---|
+| Minimum faan to win | 0 (any valid hand) | 3 |
+| Turn timer | 10 s (auto-discard on timeout) | 20 s |
+| Claim window | 3 s | 5 s |
+| Match structure | Hands until 1 player left | 4 rounds (E/S/W/N) |
+| Who "loses" a hand | Win on discard → **discarder**; self-drawn → **everyone else** | Points payout |
+| Draw game (wall empty) | Everyone with no ready hand eats | Dealer stays |
+| Big hands (≥ 5 faan) | Losers eat **two** dumplings | Bigger payout |
+| Players | 2–4 (empty seats filled by bots) | 4 |
 
-### 2.4 Scoring algorithm note
-A hand can decompose into melds multiple ways (e.g. 111222333 = three pungs or three chows).
-The calculator must **enumerate all valid decompositions and pick the highest faan**.
+Big hands carrying extra risk keeps the mahjong strategy meaningful: going for
+a pure one suit is a gamble that can wipe the table.
 
 ---
 
-## 3. Architecture
+## 4. Tech Plan
 
-Recommended stack (change if you prefer): **TypeScript**, web front end, engine as a
-pure library so it runs in the browser, a Node server, and tests alike.
+### 4.1 Stack (recommended)
+| Area | Choice | Notes |
+|---|---|---|
+| Engine | **Unity 6 (C#)** | Most common choice for indie 3D party games; huge asset/tutorial base |
+| Netcode | Netcode for GameObjects *or* FishNet | Host-authoritative (one player hosts) |
+| Lobbies / invites | Steamworks (Facepunch.Steamworks) | Steam friends invite, relay = no port forwarding |
+| Voice chat | Vivox or Steam Voice | Proximity not needed — everyone's at one table |
+| Physics / ragdoll | Unity physics | Tiles are physical objects for "juice" |
 
+Alternative: **Godot 4** (free, open source) if you'd rather avoid Unity.
+
+### 4.2 Architecture
+- **Pure C# game engine** (separate assembly, no `UnityEngine` reference): tiles,
+  wall, turns, claims, win detection, faan, party rules. Fully unit-tested, deterministic,
+  seeded RNG.
+- **Host-authoritative:** only the host runs the engine. Clients send *intents*
+  ("discard 5 Bamboo", "accuse player 3"); the host validates and broadcasts results.
+- **Hidden information:** clients only receive their own hand + public info, so a
+  modded client can't see other hands or the wall.
+- **Presentation layer** listens to engine events and plays animations/sound
+  (tile slides, slams, roulette, ragdolls). The engine never waits on animation.
+
+### 4.3 Project layout
 ```
-/src
-  /engine        Pure game logic — no UI, no I/O, fully deterministic
-    tiles.ts       Tile types, full set, encoding, sorting
-    wall.ts        Shuffle (seeded RNG), deal, draw, replacement draws, dead wall
-    hand.ts        Concealed tiles, exposed melds, bonus tiles
-    actions.ts     Legal-action generator (discard, chow, pung, kong, win)
-    state.ts       GameState + reducer: apply(state, action) -> state
-    rules.ts       RuleSet config (min faan, limit, house rules)
-  /scoring
-    decompose.ts   Find all 4-melds-+-pair decompositions; special hands
-    faan.ts        Pattern detectors -> faan breakdown
-    payout.ts      Faan -> points, who pays whom
-  /ai
-    bot.ts         Bot interface: chooseAction(view) -> action
-    simple.ts      Heuristic bot (shanten / tile efficiency)
-  /ui            Rendering, input, animations, sound
-  /net           (later) Multiplayer client/server sync
-/tests           Unit tests per module + scripted full-hand scenarios
+Assets/_Project/
+  Scripts/
+    Engine/        Pure C#: Tiles, Wall, Hand, Actions, GameState, RuleSet
+    Scoring/       Decomposition, Faan detectors, Payout
+    Party/         Lives, Dumpling Roulette, Cheats, Accusations
+    Bots/          Bot players (fill empty seats, practice mode)
+    Net/           Lobby, Steam, message types, host/client sync
+    Table/         3D table, tile objects, seat cameras, look-direction sync
+    Characters/    Animation controllers, voice lines, ragdoll
+    UI/            Claim buttons, hand hints, menus, settings
+  Art/  Audio/  Prefabs/  Scenes/
+Tests/EditMode/    NUnit tests for Engine, Scoring, Party
 ```
 
-Key design decisions:
-- **Reducer-style state machine**: every move is an action; makes replays, undo,
-  networking, and testing easy.
-- **Player views**: each player/bot only sees what they're allowed to see (no peeking at walls).
-- **Seeded RNG**: reproducible deals for debugging and replays.
-- **RuleSet object**: all house-rule variation lives in config, not in `if` statements scattered around.
+---
+
+## 5. Juice & Feel Checklist
+- Heavy, clacky tile sounds; screen shake and a shout on Pung/Kong
+- First-person seat camera, free head look (and your head turns for others to see)
+- Push-to-talk + text chat bubbles; emotes (slam table, point, laugh, sweat)
+- Dumpling Roulette moment: slow zoom, heartbeat audio, everyone watches
+- Pepper KO: face turns red, fire breath, chair tips over, ragdoll
+- Dead players become floating ghosts who can heckle (voice) but not see hands
+- Winning hand reveal: tiles flip with a big faan counter rolling up
 
 ---
 
-## 4. Features
-
-### MVP
-- Single player vs 3 bots
-- Full rules: claims, kongs, flowers, dealer rotation, a full 4-round game
-- Faan breakdown shown on win; running score table
-- Tile sorting, highlighting of claimable actions, claim timer
-
-### Later
-- Online multiplayer (rooms, reconnect)
-- Stronger AI (defensive play, reading discards)
-- Rule presets / custom house rules screen
-- Replays and hand history
-- Tutorial mode with hints ("you can pung this", "this hand is worth N faan")
-- Cantonese / English / Chinese localisation
-- Mobile-friendly layout, sound effects
-
----
-
-## 5. Milestones
+## 6. Milestones
 
 | # | Milestone | Done when |
 |---|---|---|
-| M0 | Project setup | Repo, build, lint, test runner working |
-| M1 | Tiles & wall | Can shuffle, deal 13/14, replace flowers; tests pass |
-| M2 | Turn loop | Text/CLI game: draw, discard, chow/pung/kong with priority |
-| M3 | Win detection | Correctly detects standard + special winning hands |
-| M4 | Faan & payout | Full faan breakdown + points; scenario tests for every pattern |
-| M5 | Full game flow | Dealer rotation, prevailing wind, draw games, final standings |
-| M6 | Bots | Heuristic bots can play complete games against each other |
-| M7 | UI | Playable graphical table vs 3 bots |
-| M8 | Polish | Animations, sound, settings, rule presets |
-| M9 | Multiplayer | (optional) Online rooms |
+| M0 | Setup | Unity project, Git LFS, engine assembly, test runner green |
+| M1 | Engine core | Tiles, wall, dealing, flowers, turn loop, claims — headless tests pass |
+| M2 | Win & faan | Win detection + faan calculator with tests for every pattern |
+| M3 | Greybox table | Single player vs 3 bots in a 3D greybox room, playable start to finish |
+| M4 | Multiplayer | Steam lobby, 2–4 players online, host-authoritative, bots fill seats |
+| M5 | Party layer | Lives, Dumpling Roulette, eliminations, ghost spectators |
+| M6 | Cheat & accuse | Cheats, look-direction sync, accusation flow |
+| M7 | Characters & voice | 4 characters, animations, voice lines, voice chat, emotes |
+| M8 | Art & polish | Parlour environment, lighting, juice pass, menus, settings |
+| M9 | Ship | Playtests, Steam page, trailer, release (~US$5 price point) |
+
+Get M3 fun before investing in M4+: if the greybox party loop isn't funny with
+bots and placeholder cubes, art won't save it.
 
 ---
 
-## 6. Testing strategy
-- Unit tests for decomposition and every faan pattern (use known example hands).
-- Property tests: tile counts always total 144; no tile duplicated across zones.
-- Bot-vs-bot simulation of thousands of games to catch illegal states.
-- Seeded scenario tests for edge cases: robbing the kong, kong replacement win,
-  last-tile win, multiple players claiming the same discard.
+## 7. Testing
+- Unit tests for every faan pattern and tricky decompositions.
+- Invariant checks: 144 tiles always accounted for; no duplicates across zones.
+- Bot-vs-bot soak tests: thousands of simulated hands to catch illegal states.
+- Network tests: two local instances via ParrelSync; latency/disconnect simulation.
+- Weekly friend playtests from M5 onward — measure laughs, not just bugs.
 
 ---
 
-## 7. Open questions
-- Platform: web, mobile, or desktop?
-- Single-player only first, or multiplayer from the start?
-- Default minimum faan (0 / 1 / 3) and limit (10 / 13)?
-- Include Seven Pairs? Which payout table?
+## 8. Open Questions
+- Unity or Godot?
+- Cheating in v1, or ship roulette-only first and add cheats as an update?
+- Shared steamer vs personal steamers?
+- Art direction: low-poly clean, or crunchy PSX-style?
+- Do we keep Classic mode in v1 or cut it to ship faster?
