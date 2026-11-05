@@ -75,14 +75,16 @@ namespace MahjongNight.Core
 
         // ------------------------------------------------------------------ shapes
 
-        internal static bool IsThirteenOrphans(IReadOnlyList<Tile> tiles)
+        /// <summary>十三么 shape: one of each terminal and honour plus a duplicate (14 tiles, no melds).</summary>
+        public static bool IsThirteenOrphans(IReadOnlyList<Tile> tiles)
         {
             if (tiles.Count != 14 || tiles.Any(t => !t.IsValid || !t.IsTerminalOrHonor))
                 return false;
             return tiles.Distinct().Count() == 13;
         }
 
-        internal static bool IsSevenPairs(IReadOnlyList<Tile> tiles)
+        /// <summary>七對 shape: seven different pairs (14 tiles, no melds; four of a kind doesn't count).</summary>
+        public static bool IsSevenPairs(IReadOnlyList<Tile> tiles)
         {
             if (tiles.Count != 14 || tiles.Any(t => !t.IsValid || t.IsBonus))
                 return false;
