@@ -95,6 +95,21 @@ namespace MahjongNight.Game
                 }
             }
 
+            // Reply to the dog with 1-3 (no mouse needed).
+            PhoneState mine = phones[HumanSeat];
+            if (mine != null && mine.IsDogText && !mine.Replied && now >= mine.MinUntil && humanAlive)
+            {
+                for (int i = 0; i < DogReplies.Length; i++)
+                {
+                    if (Input.GetKeyDown(KeyCode.Alpha1 + i))
+                    {
+                        mine.Replied = true;
+                        AddLog($"You text your dog: \"{DogReplies[i]}\"");
+                    }
+                }
+                return; // number keys answer the dog instead of calling
+            }
+
             // Calling: P opens the phone, 1-3 call a player directly.
             if (humanAlive && playing)
             {
@@ -224,9 +239,10 @@ namespace MahjongNight.Game
                 }
                 else
                 {
-                    foreach (string reply in DogReplies)
+                    for (int i = 0; i < DogReplies.Length; i++)
                     {
-                        if (GUI.Button(new Rect(x, y, iw, Unit * 2.2f), reply, buttonStyle))
+                        string reply = DogReplies[i];
+                        if (GUI.Button(new Rect(x, y, iw, Unit * 2.2f), $"{i + 1}:  {reply}", buttonStyle))
                         {
                             p.Replied = true;
                             AddLog($"You text your dog: \"{reply}\"");

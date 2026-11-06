@@ -22,6 +22,10 @@ namespace MahjongNight.Game
         private float usingUntil, usingStarted;
         private Interactable lookingAtInteractable;
 
+        /// <summary>Is there UI on screen that needs a free mouse cursor?</summary>
+        private bool CursorNeeded =>
+            OnPhone(HumanSeat) || phonePanelOpen || !HandLive || (popupText != null && Time.time <= popupUntil);
+
         /// <summary>Does the human (rather than a bot) play this seat right now?</summary>
         private bool HumanControls(int seat) => seat == HumanSeat && humanAlive;
 
@@ -50,9 +54,18 @@ namespace MahjongNight.Game
         {
             UpdatePhones(now);
 
+            // Standing captures the mouse for looking around — but release it whenever there's
+            // something on screen to click (phone, call panel, popup, results/shop).
+            bool needsCursor = standing && CursorNeeded;
+            if (standing)
+            {
+                Cursor.lockState = needsCursor ? CursorLockMode.None : CursorLockMode.Locked;
+                Cursor.visible = needsCursor;
+            }
+
             if (humanAlive && match.Phase != MatchPhase.MatchOver)
             {
-                bool canMove = standing && !using_.HasValue && !OnPhone(HumanSeat);
+                bool canMove = standing && !using_.HasValue && !OnPhone(HumanSeat) && !needsCursor;
                 Exertion exertion = standing ? walker.Tick(dt, canMove) : Exertion.Resting;
                 needs.Tick(dt, exertion);
                 if (needs.IsDead)

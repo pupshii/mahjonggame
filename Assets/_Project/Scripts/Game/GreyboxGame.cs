@@ -828,6 +828,8 @@ namespace MahjongNight.Game
             if (standing)
             {
                 DrawStandingHud();
+                if (!HandLive)
+                    DrawBetweenHands(); // results + shop still need to be reachable while you're up
             }
             else if (HandLive)
             {
@@ -950,7 +952,7 @@ namespace MahjongNight.Game
                 "<color=#aaa>Right-click/Tab: table view · Scroll: zoom · F: stand up / sit · P: phone</color>",
             };
 
-            float w = Unit * 24;
+            float w = Mathf.Min(Screen.width * 0.45f, lines.Max(l => TextWidth(textStyle, l)) + Pad * 2 + 8);
             int logCount = Mathf.Min(StatusLogLines, log.Count);
             float buttonH = Unit * 1.8f;
             float h = Pad * 2 + LineHeight * lines.Count + logCount * LineHeight * 0.85f + buttonH + 6;
