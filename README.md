@@ -28,6 +28,9 @@ git clone https://github.com/pupshii/mahjonggame.git
 2. **Look around with the cursor:** the middle of the screen is calm; push to the left/right
    edges to watch the players beside you, the top edge to look across, the **bottom edge to look
    down** into your lap.
+   **Table view:** hold **right-click** (or **Tab**) to lean over the table and see every discard
+   pile and exposed set from above — but while you do, you can't watch anyone's hands.
+   **Scroll** to zoom (in the table view, the cursor pans while zoomed); **middle-click** resets zoom.
 3. **Your turn:** click a tile in your hand to discard it. Claim buttons appear above your hand.
    3 faan minimum to win.
 4. **Cheat:** look down — a pocket strip appears. 1) pick a hand tile to slip into your pocket,

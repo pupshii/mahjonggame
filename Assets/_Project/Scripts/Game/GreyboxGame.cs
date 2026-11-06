@@ -94,6 +94,7 @@ namespace MahjongNight.Game
         private float stylesForHeight;
         private GUIStyle boxStyle, textStyle, titleStyle, centerStyle, logStyle, buttonStyle, pickerStyle, captionStyle;
         private bool showFullLog;
+        private bool rightMouseHeld, tabHeld;   // hold either to lean over the table
         private Tile? pickedHandTile;     // pocket strip selections (before pressing Swap)
         private int pickedPocketIndex = -1;
 
@@ -118,7 +119,7 @@ namespace MahjongNight.Game
                 int relative = (s - HumanSeat + HandState.SeatCount) % HandState.SeatCount;
                 avatars[s] = new PlayerAvatar(transform, s, relative, SeatColors[s], firstPerson: s == HumanSeat);
             }
-            headLook = new HeadLook(cam.transform, avatars[HumanSeat].EyePosition);
+            headLook = new HeadLook(cam, avatars[HumanSeat].EyePosition);
             NewMatch();
         }
 
@@ -131,7 +132,7 @@ namespace MahjongNight.Game
                 go.tag = "MainCamera";
                 cam = go.AddComponent<Camera>();
             }
-            cam.fieldOfView = 65f;
+            cam.fieldOfView = HeadLook.SeatFov;
             cam.nearClipPlane = 0.02f;
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.07f, 0.06f, 0.08f);
@@ -221,12 +222,16 @@ namespace MahjongNight.Game
         private void UpdateHumanHead(float dt)
         {
             bool overUi = uiRects.Any(r => r.Contains(mouseGui));
+            bool tableView = rightMouseHeld || tabHeld;
+            headLook.SetTableView(tableView);
             if (!HandLive)
                 headLook.AimNeutral();
+            else if (hasMouse && !overUi && !PickerOpen && tableView)
+                headLook.AimTableView(mouseGui, Screen.width, Screen.height);
             else if (hasMouse && !overUi && !PickerOpen)
                 headLook.AimFromCursor(mouseGui, Screen.width, Screen.height);
             headLook.Tick(dt);
-            avatars[HumanSeat].SetHeadRotation(headLook.Rotation);
+            avatars[HumanSeat].SetHeadRotation(headLook.HeadRotation);
         }
 
         private bool PickerOpen => HandLive && Hand.Phase == HandPhase.AwaitingDraw && Hand.CurrentSeat == HumanSeat;
@@ -759,7 +764,15 @@ namespace MahjongNight.Game
                 UpdateHover(e.mousePosition);
             }
 
-            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Space && HandLive)
+            // Table view (hold right mouse or Tab) and zoom (scroll wheel).
+            if (e.type == EventType.MouseDown && e.button == 1) { rightMouseHeld = true; e.Use(); }
+            else if (e.type == EventType.MouseUp && e.button == 1) { rightMouseHeld = false; e.Use(); }
+            else if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Tab) { tabHeld = true; e.Use(); }
+            else if (e.type == EventType.KeyUp && e.keyCode == KeyCode.Tab) { tabHeld = false; e.Use(); }
+            else if (e.type == EventType.ScrollWheel) { headLook.AddZoom(-e.delta.y * 0.04f); e.Use(); }
+            else if (e.type == EventType.MouseDown && e.button == 2) { headLook.ResetZoom(); e.Use(); }
+
+            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Space && HandLive && !headLook.InTableView)
             {
                 e.Use();
                 HumanCallOut(LookTarget());
@@ -775,7 +788,7 @@ namespace MahjongNight.Game
                     Apply(PlayerAction.Discard(HumanSeat, tile));
                     GUIUtility.ExitGUI();
                 }
-                else if (hoveredAvatar >= 0 && HandLive)
+                else if (hoveredAvatar >= 0 && HandLive && !headLook.InTableView)
                 {
                     int target = hoveredAvatar;
                     e.Use();
@@ -798,7 +811,9 @@ namespace MahjongNight.Game
                     DrawActionBar();
                 if (PickerOpen)
                     DrawPicker();
-                if (!headLook.LookingDown)
+                if (headLook.InTableView)
+                    DrawTableViewHint();
+                else if (!headLook.LookingDown)
                     DrawLookHint();
             }
             else
@@ -900,6 +915,7 @@ namespace MahjongNight.Game
                 HandLive ? $"Turn: {SeatName(Hand.CurrentSeat)}" : "Hand over",
                 ScoresLine(),
                 "Your upgrades: " + string.Join(" · ", Upgrades.All.Select(u => $"{Upgrades.Name(u)} {me.Level(u)}")),
+                "<color=#aaa>Hold right-click / Tab: table view · Scroll: zoom · Middle-click: reset zoom</color>",
             };
 
             float w = Unit * 24;
@@ -960,6 +976,16 @@ namespace MahjongNight.Game
                 GUI.Box(r, GUIContent.none, boxStyle);
                 GUI.Label(new Rect(r.x + Pad, r.y + 2, r.width - Pad * 2, r.height - 4), text, style);
             }
+        }
+
+        /// <summary>Reminds you that while you study the table, you aren't watching anyone.</summary>
+        private void DrawTableViewHint()
+        {
+            const string text = "Table view — you're leaning over the table and can't watch anyone's hands";
+            float w = TextWidth(centerStyle, text) + Pad * 2;
+            var r = new Rect(Screen.width - w - Pad, Pad, w, LineHeight + Pad);
+            GUI.Box(r, GUIContent.none, boxStyle);
+            GUI.Label(r, text, centerStyle);
         }
 
         /// <summary>Tells you who a SPACE / click call-out would accuse.</summary>
