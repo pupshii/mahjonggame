@@ -32,6 +32,7 @@ namespace MahjongNight.Game
         private static readonly Vector3 RightRest = new Vector3(0.3f, 0.035f, -0.86f);
         private static readonly Vector3 LeftRest = new Vector3(-0.32f, 0.035f, -0.86f);
         private static readonly Vector3 PocketPos = new Vector3(0.21f, -0.07f, -1.1f);
+        private static readonly Vector3 PhonePos = new Vector3(0.05f, 0.12f, -0.97f);
         private const float EyeOffset = 0.1f;
         private const float HeadTurnSpeed = 6f;
 
@@ -39,13 +40,15 @@ namespace MahjongNight.Game
         private readonly Transform head;
         private readonly Transform rightHand, leftHand, rightArm, leftArm;
         private readonly Transform carriedTile;
+        private readonly Transform root;
+        private readonly GameObject phone;
         private Vector3 gazeTarget;
 
         public PlayerAvatar(Transform parent, int seat, int relative, Color color, bool firstPerson)
         {
             Seat = seat;
             frame = Quaternion.Euler(0f, -90f * relative, 0f);
-            var root = new GameObject($"Avatar{seat}").transform;
+            root = new GameObject($"Avatar{seat}").transform;
             root.SetParent(parent, false);
 
             Material body = TileFactory.CreateMaterial(color);
@@ -93,6 +96,12 @@ namespace MahjongNight.Game
             carriedTile.localScale = new Vector3(0.6f, 0.8f, 0.45f);
             carriedTile.gameObject.SetActive(false);
 
+            phone = Part(PrimitiveType.Cube, root, "Phone", dark, true);
+            phone.transform.position = World(PhonePos);
+            phone.transform.rotation = frame * Quaternion.Euler(-50f, 0f, 0f);
+            phone.transform.localScale = new Vector3(0.07f, 0.13f, 0.012f);
+            phone.SetActive(false);
+
             gazeTarget = Vector3.zero;
             head.rotation = Quaternion.LookRotation(gazeTarget - EyePosition);
             SetRightHand(HandPose.Rest, 0f, 0f);
@@ -121,6 +130,15 @@ namespace MahjongNight.Game
         public Vector3 DiscardsPoint => World(new Vector3(0f, 0.02f, -0.42f));
         public Vector3 PocketPoint => World(PocketPos);
         public Vector3 TagPoint => World(NeckPos + new Vector3(0f, 0.3f, 0f));
+
+        /// <summary>Where the player's phone is held (they look here while texting or on a call).</summary>
+        public Vector3 PhonePoint => World(PhonePos);
+
+        /// <summary>Show or hide the phone in their hands.</summary>
+        public void SetPhone(bool on) => phone.SetActive(on);
+
+        /// <summary>Show or hide the whole body (the human's body hides while they walk around).</summary>
+        public void SetVisible(bool visible) => root.gameObject.SetActive(visible);
 
         /// <summary>Turn the head toward <paramref name="worldTarget"/> (smoothly, in <see cref="Tick"/>).</summary>
         public void LookAt(Vector3 worldTarget) => gazeTarget = worldTarget;

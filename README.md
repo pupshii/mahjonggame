@@ -39,10 +39,19 @@ git clone https://github.com/pupshii/mahjonggame.git
    the hand ends.
 5. **Catch cheaters:** if you see a bot reach under the table, press **SPACE** (calls out whoever
    you're looking at) or click them. A wrong call costs you 3 faan.
-6. **Between hands:** winners collect faan (discarder pays, or everyone on a self-draw); spend
+6. **Phone:** your dog texts you now and then ("when r u coming home??") — your view is forced
+   onto your phone until you reply, and you can't act at the table meanwhile. Press **P** (or
+   **1-3**) to call another player: they stare at their phone for ~5 s (45 s cooldown). Bots
+   text too, and may call *you* when you're watching them too closely.
+7. **Survival:** Food, Water and Pee bars drain over time (walking/sprinting drains food and
+   water faster; drinking fills your bladder). Press **F** to stand up, **WASD** to walk,
+   **Shift** to sprint, **E** to use the toilet / water jar / food counter, **F** at your chair
+   to sit back down. While you're up, your turns play themselves after 3 s. If any bar hits 0
+   you die: a house bot takes your seat and you can't win the match. (Bots don't have bars yet.)
+8. **Between hands:** winners collect faan (discarder pays, or everyone on a self-draw); spend
    faan on upgrades (Sleight of Hand, Deep Pockets, Poker Face, Eagle Eye). Highest faan after
    8 hands wins.
-7. Inspector options on **Greybox Game**: Classic rules, choose-your-draw, match length,
+9. Inspector options on **Greybox Game**: Classic rules, choose-your-draw, match length,
    penalties, bot nerve / spot chance, pacing, reveal bot hands, fixed seed.
 
 ## Running tests

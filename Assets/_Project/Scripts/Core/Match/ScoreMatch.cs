@@ -31,6 +31,8 @@ namespace MahjongNight.Core
         /// <summary>Tiles from outside the game this player can swap in. Private to them (host-only).</summary>
         public IReadOnlyList<Tile> Pocket => pocket;
         public int CheatsCaught { get; internal set; }
+        /// <summary>Knocked out of the match (e.g. died); a house bot plays their seat and they can't win.</summary>
+        public bool IsOut { get; internal set; }
 
         public int Level(Upgrade u) => levels[(int)u];
         internal void SetLevel(Upgrade u, int level) => levels[(int)u] = level;
@@ -168,6 +170,18 @@ namespace MahjongNight.Core
             FinishHand(dealerKeeps: cheater != Dealer);
         }
 
+        /// <summary>
+        /// Takes <paramref name="seat"/> out of the match (they died). Their seat keeps playing as a
+        /// house bot; their score stays on the board but they can't be a winner.
+        /// </summary>
+        public void Eliminate(int seat, string reason)
+        {
+            if (players[seat].IsOut)
+                return;
+            players[seat].IsOut = true;
+            events.Add(new PlayerOutEvent(seat, reason));
+        }
+
         /// <summary><paramref name="caller"/> called out <paramref name="accused"/>, who wasn't cheating.</summary>
         public void FalseAccusation(int caller, int accused)
         {
@@ -234,8 +248,11 @@ namespace MahjongNight.Core
 
             if (HandNumber >= MatchRules.HandsPerMatch)
             {
-                int best = players.Max(p => p.Score);
-                Winners = players.Where(p => p.Score == best).Select(p => p.Seat).ToList();
+                var standing = players.Where(p => !p.IsOut).ToList();
+                if (standing.Count == 0)
+                    standing = players.ToList();
+                int best = standing.Max(p => p.Score);
+                Winners = standing.Where(p => p.Score == best).Select(p => p.Seat).ToList();
                 Phase = MatchPhase.MatchOver;
                 events.Add(new MatchOverEvent(Winners));
             }

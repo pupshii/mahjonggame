@@ -90,6 +90,17 @@ namespace MahjongNight.Core
         public override string ToString() => $"Seat{Seat} buys {Upgrade} {Level} for {Cost}";
     }
 
+    public sealed class PlayerOutEvent : MatchEvent
+    {
+        public PlayerOutEvent(int seat, string reason) : base(seat)
+        {
+            Reason = reason;
+        }
+
+        public string Reason { get; }
+        public override string ToString() => $"Seat{Seat} is out: {Reason}";
+    }
+
     public sealed class MatchOverEvent : MatchEvent
     {
         public MatchOverEvent(System.Collections.Generic.IReadOnlyList<int> winners) : base(-1)

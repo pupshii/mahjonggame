@@ -12,7 +12,7 @@ namespace MahjongNight.Game
     /// hands to earn it, spend it on cheating upgrades between hands; a caught cheater pays
     /// 10 faan to everyone. Highest score after the last hand wins.
     /// </summary>
-    public sealed class GreyboxGame : MonoBehaviour
+    public sealed partial class GreyboxGame : MonoBehaviour
     {
         [Header("Rules")]
         [Tooltip("Off = Party rules. On = Classic. Both need 3 faan to win.")]
@@ -120,6 +120,7 @@ namespace MahjongNight.Game
                 avatars[s] = new PlayerAvatar(transform, s, relative, SeatColors[s], firstPerson: s == HumanSeat);
             }
             headLook = new HeadLook(cam, avatars[HumanSeat].EyePosition);
+            SetUpLife();
             NewMatch();
         }
 
@@ -157,6 +158,7 @@ namespace MahjongNight.Game
             for (int s = 0; s < HandState.SeatCount; s++)
                 brains[s] = s == HumanSeat ? null : new BotBrain(s, matchSeed + (ulong)s * 31UL);
             AddLog($"New match: {matchRules.HandsPerMatch} hands (seed {matchSeed}).");
+            ResetLife();
             StartHand();
         }
 
@@ -194,11 +196,14 @@ namespace MahjongNight.Game
             float now = Time.time;
             float dt = Time.deltaTime;
 
-            UpdateHumanHead(dt);
+            UpdateLife(now, dt);
+            if (!standing)
+                UpdateHumanHead(dt);
             for (int s = 0; s < HandState.SeatCount; s++)
             {
                 float pitch = s == HumanSeat ? headLook.Pitch : avatars[s].PitchDown;
-                lookingDownFor[s] = pitch >= HeadLook.LookingDownPitch ? lookingDownFor[s] + dt : 0f;
+                bool innocent = OnPhone(s) || (s == HumanSeat && standing); // everyone can see a phone
+                lookingDownFor[s] = !innocent && pitch >= HeadLook.LookingDownPitch ? lookingDownFor[s] + dt : 0f;
             }
 
             if (HandLive)
@@ -222,9 +227,11 @@ namespace MahjongNight.Game
         private void UpdateHumanHead(float dt)
         {
             bool overUi = uiRects.Any(r => r.Contains(mouseGui));
-            bool tableView = rightMouseHeld || tabHeld;
+            bool tableView = (rightMouseHeld || tabHeld) && !OnPhone(HumanSeat);
             headLook.SetTableView(tableView);
-            if (!HandLive)
+            if (OnPhone(HumanSeat) && humanAlive)
+                headLook.AimAt(0f, HeadLook.BasePitch + 45f); // eyes on your phone, like it or not
+            else if (!HandLive)
                 headLook.AimNeutral();
             else if (hasMouse && !overUi && !PickerOpen && tableView)
                 headLook.AimTableView(mouseGui, Screen.width, Screen.height);
@@ -234,13 +241,14 @@ namespace MahjongNight.Game
             avatars[HumanSeat].SetHeadRotation(headLook.HeadRotation);
         }
 
-        private bool PickerOpen => HandLive && Hand.Phase == HandPhase.AwaitingDraw && Hand.CurrentSeat == HumanSeat;
+        private bool PickerOpen => HandLive && humanAlive && Hand.Phase == HandPhase.AwaitingDraw && Hand.CurrentSeat == HumanSeat;
 
         // ------------------------------------------------------------------ mahjong turns
 
         private void UpdateTurns(float now)
         {
-            if (HumanActions().Count > 0 && humanTimeLimit > 0f && now - humanWaitStart > humanTimeLimit)
+            float limit = HumanAway ? AwayAutoPlaySeconds : humanTimeLimit;
+            if (HumanActions().Count > 0 && limit > 0f && now - humanWaitStart > limit)
             {
                 AutoPlayHuman();
                 return;
@@ -251,14 +259,14 @@ namespace MahjongNight.Game
             if (Hand.Phase == HandPhase.AwaitingAction || Hand.Phase == HandPhase.AwaitingDraw)
             {
                 int s = Hand.CurrentSeat;
-                if (s != HumanSeat && !BotBusyCheating(s))
+                if (!HumanControls(s) && !BotBusyCheating(s) && !OnPhone(s))
                     BotAct(s);
             }
             else
             {
                 foreach (int s in Hand.SeatsAwaitingResponse())
                 {
-                    if (s != HumanSeat)
+                    if (!HumanControls(s) && !OnPhone(s))
                     {
                         BotAct(s);
                         return;
@@ -278,7 +286,7 @@ namespace MahjongNight.Game
         }
 
         private List<PlayerAction> HumanActions() =>
-            HandLive ? Hand.GetLegalActions(HumanSeat) : new List<PlayerAction>();
+            HandLive && humanAlive ? Hand.GetLegalActions(HumanSeat) : new List<PlayerAction>();
 
         private void BotAct(int seat)
         {
@@ -461,6 +469,11 @@ namespace MahjongNight.Game
                 BotBrain b = brains[s];
                 if (b == null || (cheats[s] != null && cheats[s].InProgress) || b.CallOutTarget >= 0)
                     continue;
+                if (OnPhone(s))
+                {
+                    avatars[s].LookAt(avatars[s].PhonePoint);
+                    continue;
+                }
                 b.UpdateGaze(now, avatars[s], avatars, onTurn, lookingDownFor);
             }
         }
@@ -471,7 +484,7 @@ namespace MahjongNight.Game
             for (int s = 0; s < HandState.SeatCount; s++)
             {
                 BotBrain b = brains[s];
-                if (b == null || b.CheatedThisHand || (cheats[s] != null && cheats[s].InProgress))
+                if (b == null || b.CheatedThisHand || (cheats[s] != null && cheats[s].InProgress) || OnPhone(s))
                     continue;
 
                 bool myTurn = Hand.Phase == HandPhase.AwaitingAction && Hand.CurrentSeat == s;
@@ -515,7 +528,10 @@ namespace MahjongNight.Game
                     continue;
                 }
                 if (WatchedBySomeone(s))
+                {
+                    TryBotDistractHuman(s); // you're watching? ring ring
                     continue;
+                }
 
                 b.CheatedThisHand = true;
                 b.WantCheatSince = -1f;
@@ -757,11 +773,17 @@ namespace MahjongNight.Game
             if (e.type == EventType.Layout)
                 uiRects.Clear();
 
-            if (e.type == EventType.MouseMove || e.type == EventType.MouseDown || e.type == EventType.MouseDrag || e.type == EventType.Repaint)
+            if (!standing && (e.type == EventType.MouseMove || e.type == EventType.MouseDown || e.type == EventType.MouseDrag || e.type == EventType.Repaint))
             {
                 mouseGui = e.mousePosition;
                 hasMouse = true;
-                UpdateHover(e.mousePosition);
+                if (humanAlive && !OnPhone(HumanSeat))
+                    UpdateHover(e.mousePosition);
+                else
+                {
+                    hoveredTile = null;
+                    hoveredAvatar = -1;
+                }
             }
 
             // Table view (hold right mouse or Tab) and zoom (scroll wheel).
@@ -772,14 +794,15 @@ namespace MahjongNight.Game
             else if (e.type == EventType.ScrollWheel) { headLook.AddZoom(-e.delta.y * 0.04f); e.Use(); }
             else if (e.type == EventType.MouseDown && e.button == 2) { headLook.ResetZoom(); e.Use(); }
 
-            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Space && HandLive && !headLook.InTableView)
+            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Space && HandLive && humanAlive
+                && !OnPhone(HumanSeat) && (standing || !headLook.InTableView))
             {
                 e.Use();
                 HumanCallOut(LookTarget());
                 GUIUtility.ExitGUI();
             }
 
-            if (e.type == EventType.MouseDown && e.button == 0 && !uiRects.Any(r => r.Contains(e.mousePosition)))
+            if (!standing && e.type == EventType.MouseDown && e.button == 0 && !uiRects.Any(r => r.Contains(e.mousePosition)))
             {
                 if (hoveredTile != null)
                 {
@@ -802,24 +825,31 @@ namespace MahjongNight.Game
             if (showFullLog)
                 DrawFullLog(statusBottom + 8);
 
-            if (HandLive)
+            if (standing)
             {
-                bool cheatUi = headLook.LookingDown || (cheats[HumanSeat] != null && cheats[HumanSeat].InProgress);
+                DrawStandingHud();
+            }
+            else if (HandLive)
+            {
+                bool seatedAndFree = humanAlive && !OnPhone(HumanSeat);
+                bool cheatUi = seatedAndFree && (headLook.LookingDown || (cheats[HumanSeat] != null && cheats[HumanSeat].InProgress));
                 if (cheatUi)
                     DrawCheatStrip();
-                else
-                    DrawActionBar();
-                if (PickerOpen)
+                else if (seatedAndFree || !humanAlive)
+                    DrawActionBar(); // on the phone you can't act — the turn timer keeps running
+                if (PickerOpen && seatedAndFree)
                     DrawPicker();
                 if (headLook.InTableView)
                     DrawTableViewHint();
-                else if (!headLook.LookingDown)
+                else if (!headLook.LookingDown && seatedAndFree)
                     DrawLookHint();
             }
             else
             {
                 DrawBetweenHands();
             }
+            DrawCallPanel();
+            DrawPhoneOverlay();
             DrawPopup();
         }
 
@@ -915,7 +945,9 @@ namespace MahjongNight.Game
                 HandLive ? $"Turn: {SeatName(Hand.CurrentSeat)}" : "Hand over",
                 ScoresLine(),
                 "Your upgrades: " + string.Join(" · ", Upgrades.All.Select(u => $"{Upgrades.Name(u)} {me.Level(u)}")),
-                "<color=#aaa>Hold right-click / Tab: table view · Scroll: zoom · Middle-click: reset zoom</color>",
+                NeedsLine(),
+                PhoneStatusLine(),
+                "<color=#aaa>Right-click/Tab: table view · Scroll: zoom · F: stand up / sit · P: phone</color>",
             };
 
             float w = Unit * 24;

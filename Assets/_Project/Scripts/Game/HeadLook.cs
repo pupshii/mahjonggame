@@ -83,6 +83,13 @@ namespace MahjongNight.Game
             targetPitch = BasePitch + Mathf.SmoothStep(0f, 1f, down) * MaxDown - Mathf.SmoothStep(0f, 1f, up) * MaxUp;
         }
 
+        /// <summary>Look in a fixed direction (e.g. down at your phone), ignoring the cursor.</summary>
+        public void AimAt(float yawDegrees, float pitchDegrees)
+        {
+            targetYaw = yawDegrees;
+            targetPitch = pitchDegrees;
+        }
+
         /// <summary>Ease back to looking at the table.</summary>
         public void AimNeutral()
         {
