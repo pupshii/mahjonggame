@@ -72,6 +72,7 @@ namespace MahjongNight.Game
             using_ = null;
             humanPhone = null;
             phonePanelOpen = false;
+            drum = null;
             popupText = null;
             hoveredTile = null;
             hoveredAvatar = -1;

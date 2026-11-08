@@ -149,6 +149,8 @@ namespace MahjongNight.Game
         private readonly System.Random rng = new System.Random(7);
 
         public bool BallInMouth => ballHeld;
+        /// <summary>What Latte is up to right now (for the Latte Cam app).</summary>
+        public string Doing { get; private set; } = "lying on the rug";
         public Fetch Fetching => fetch;
 
         public DogView(Transform parent, Vector3 restPosition, Vector3 bowlPosition, Vector3 greetPosition, GameObject bowlFood,
@@ -383,6 +385,16 @@ namespace MahjongNight.Game
             }
 
             bool clapping = !eating && !moving && (greeting && arrived || clock < clapUntil || clock < celebrateUntil);
+
+            Doing = eating ? "eating dinner"
+                : fetch == Fetch.Chasing ? "chasing the ball!"
+                : fetch == Fetch.Returning ? "bringing the ball back"
+                : clapping ? "standing up, clapping"
+                : booping ? "booping the ball around"
+                : moving ? "strolling around on two legs"
+                : mood == DogMood.Starving ? "lying by the door, sighing"
+                : mood == DogMood.Hungry ? "staring at the empty bowl"
+                : "lying on the rug";
 
             // Face where they're walking, else you (or the bowl while eating).
             Vector3 look = moving ? target - pos : (eating ? bowlPos : you) - pos;

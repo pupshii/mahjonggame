@@ -100,6 +100,7 @@ namespace MahjongNight.Game
             seedSource = new SeededRandom(seed != 0 ? (ulong)seed : (ulong)System.DateTime.Now.Ticks);
 
             SetUpCameraAndLight();
+            SetUpSounds();
             if (showDifficultyMenu)
                 menu = MenuMode.Start;     // Easy / Medium / Hard — see GreyboxGame.Menu
             else
@@ -880,7 +881,7 @@ namespace MahjongNight.Game
             }
             float overviewBottom = DrawTablesOverview();
             DrawKitchenCard(overviewBottom + 8);
-            DrawCallPanel();
+            DrawPhone();
             DrawMiniGame();
             DrawToast();
             DrawPhoneOverlay();

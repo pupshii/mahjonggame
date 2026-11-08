@@ -53,6 +53,7 @@ namespace MahjongNight.Game
         {
             UpdateHome(now, dt);
             UpdateHumanPhone(now);
+            UpdateDrums(dt);
 
             // Standing captures the mouse for looking around — but release it whenever there's
             // something on screen to click (phone, call panel, popup, results/shop).
@@ -209,7 +210,7 @@ namespace MahjongNight.Game
             ctx = Seated;
             if (OnPhone(HumanSeat))
                 PutPhoneAway(HumanSeat);
-            phonePanelOpen = false;
+            ClosePhone();
             popupText = null;
             stageStopped = true;
             restartAt = Time.time + DeathScreenSeconds;

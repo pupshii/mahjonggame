@@ -57,7 +57,8 @@ namespace MahjongNight.Game
 
         private PhoneState GetPhone(int seat) => seat == HumanSeat ? humanPhone : ctx.Phones[seat];
 
-        private bool OnPhone(int seat) => GetPhone(seat) != null;
+        /// <summary>Looking at their phone: a text or call — or, for you, playing Drum Rush.</summary>
+        private bool OnPhone(int seat) => GetPhone(seat) != null || (seat == HumanSeat && Drumming);
 
         /// <summary>The avatar holding this seat's phone (yours sits at whichever table you're at).</summary>
         private PlayerAvatar PhoneHolder(int seat) => seat == HumanSeat ? Seated.Avatars[HumanSeat] : avatars[seat];
@@ -79,6 +80,8 @@ namespace MahjongNight.Game
                 }
             }
             ctx = keep;
+            StopDrums();
+            phoneApp = PhoneApp.Home;
             humanPhone = null;
             humanNextDogText = now + Range(20f, 40f);
             humanCallReadyAt = now + 15f;
@@ -119,14 +122,18 @@ namespace MahjongNight.Game
                 return; // number keys answer the dog instead of calling
             }
 
-            // Calling: P opens the phone, 1-3 call a player at the table you're sitting at.
+            // P: the phone and its apps. 1-3 quick-call a player at your table — except inside an
+            // app where the number keys pick things (songs, apps).
             if (humanAlive)
             {
                 if (Input.GetKeyDown(KeyCode.P))
-                    phonePanelOpen = !phonePanelOpen;
-                for (int s = 1; s < HandState.SeatCount; s++)
-                    if (Input.GetKeyDown(KeyCode.Alpha0 + s))
-                        TryHumanCall(s);
+                    TogglePhone();
+                if (phonePanelOpen && phoneApp != PhoneApp.Calls)
+                    HandlePhoneKeys();
+                else
+                    for (int s = 1; s < HandState.SeatCount; s++)
+                        if (Input.GetKeyDown(KeyCode.Alpha0 + s))
+                            TryHumanCall(s);
             }
         }
 
@@ -210,7 +217,7 @@ namespace MahjongNight.Game
 
         private void PutPhoneAway(int seat)
         {
-            PhoneHolder(seat).SetPhone(false);
+            PhoneHolder(seat).SetPhone(seat == HumanSeat && Drumming);   // still drumming? keep it out
             SetPhone(seat, null);
             if (seat != HumanSeat)
                 brains[seat]?.ReleaseGaze(Time.time);
@@ -308,40 +315,13 @@ namespace MahjongNight.Game
             }
         }
 
-        /// <summary>P: pick someone to call (they'll stare at their phone for a few seconds).</summary>
-        private void DrawCallPanel()
-        {
-            if (!phonePanelOpen || OnPhone(HumanSeat) || !humanAlive)
-                return;
-            float now = Time.time;
-            float w = Unit * 16, h = Unit * 13;
-            Rect r = Panel(new Rect(Screen.width - w - Pad, Screen.height * 0.3f, w, h));
-            float x = r.x + Pad, iw = r.width - Pad * 2, y = r.y + Pad;
-            GUI.Label(new Rect(x, y, iw, LineHeight), "Call someone (distracts them ~5s)", titleStyle);
-            y += LineHeight * 1.5f;
-            bool ready = now >= humanCallReadyAt;
-            for (int s = 1; s < HandState.SeatCount; s++)
-            {
-                string label = ready ? $"{s}: Call {SeatName(s)}" : $"Cooldown {Mathf.CeilToInt(humanCallReadyAt - now)}s";
-                bool wasEnabled = GUI.enabled;
-                GUI.enabled = ready && !OnPhone(s);
-                if (GUI.Button(new Rect(x, y, iw, Unit * 2.2f), label, buttonStyle))
-                {
-                    GUI.enabled = wasEnabled;
-                    TryHumanCall(s);
-                    GUIUtility.ExitGUI();
-                }
-                GUI.enabled = wasEnabled;
-                y += Unit * 2.2f + 6;
-            }
-        }
-
         private string PhoneStatusLine()
         {
             float now = Time.time;
             string call = now >= humanCallReadyAt ? "<color=#8f8>ready</color>" : $"{Mathf.CeilToInt(humanCallReadyAt - now)}s";
             var busy = Enumerable.Range(0, HandState.SeatCount).Where(s => s != HumanSeat && OnPhone(s)).Select(ShortName).ToList();
-            return $"Phone (P / 1-3 to call): {call}" + (busy.Count > 0 ? $"   ·   On their phone: {string.Join(", ", busy)}" : "");
+            string drums = Drumming ? "   ·   <color=#ff8060>drumming!</color>" : "";
+            return $"Phone (P: apps · 1-3 quick call): {call}{drums}" + (busy.Count > 0 ? $"   ·   On their phone: {string.Join(", ", busy)}" : "");
         }
     }
 }

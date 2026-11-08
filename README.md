@@ -53,9 +53,18 @@ git clone https://github.com/pupshii/mahjonggame.git
 5. **Catch cheaters:** if you see a bot reach under the table, press **SPACE** (calls out whoever
    you're looking at) or click them. A wrong call costs you 3 faan.
 6. **Phone:** your dog texts you now and then ("when r u coming home??") — your view is forced
-   onto your phone until you reply, and you can't act at the table meanwhile. Press **P** (or
-   **1-3**) to call another player: they stare at their phone for ~5 s (45 s cooldown). Bots
-   text too, and may call *you* when you're watching them too closely.
+   onto your phone until you reply, and you can't act at the table meanwhile. **1-3** quick-call
+   another player at your table: they stare at their phone for ~5 s (45 s cooldown). Bots text
+   too, and may call *you* when you're watching them too closely.
+   **P opens your phone's home screen** (1-3 or click to open an app, Backspace for home):
+   - **Phone** — call a player at your table (same as 1-3), or call Latte to hear how they are.
+   - **Drum Rush** — a side-scrolling drum rhythm game: the phone turns sideways and notes slide
+     into the target. **Red = J or left click** (the drum's face), **blue = K or right click**
+     (the rim). GREAT / GOOD / MISS, combos, a rank (S–D) and your best score per song. Three
+     songs: *Mahjong Shuffle* (easy, 110 BPM), *Dim Sum Rush* (135) and *Latte Zoomies* (hard,
+     160). While you drum you're on your phone — you can't play your hand and the turn clocks keep
+     running — and a text or call pauses the song.
+   - **Latte Cam** — what Latte is doing at home and how hungry they are.
    **Latte (your black-and-white border collie)** texts more the hungrier they get: *content* → no texts, *peckish* →
    every 70–120 s, *hungry* → every 35–60 s, *starving* → they **phone you howling** every
    15–30 s. The status panel shows Latte's bar. To feed them: walk to the club's **front door**
