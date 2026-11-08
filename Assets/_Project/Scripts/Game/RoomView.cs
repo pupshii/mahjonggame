@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using MahjongNight.Core;
 using UnityEngine;
 
 namespace MahjongNight.Game
@@ -9,6 +10,13 @@ namespace MahjongNight.Game
         Water,
         Food,
         Seat,   // your chair at a table: sit down and play there
+        // Kitchen
+        Stove,
+        Pot,
+        Chicken,
+        Onion,
+        Garlic,
+        Herbs,
     }
 
     /// <summary>Marks a room object you can use with E.</summary>
@@ -22,7 +30,8 @@ namespace MahjongNight.Game
     /// <summary>
     /// The greybox parlour: a floor and four walls sized to fit every table, a chair for each
     /// seat (yours is usable at every table), a toilet, a water jar on a side table, and a food
-    /// counter in the corners. Also answers "can I stand here?" for the walker.
+    /// counter in the corners, plus the kitchen (stove, pot, cutting board, ingredients). Also
+    /// answers "can I stand here?" for the walker.
     /// </summary>
     public sealed class RoomView
     {
@@ -125,7 +134,66 @@ namespace MahjongNight.Game
             }
             Sign(root, "FOOD  食物", new Vector3(HalfSize - 0.06f, 1.2f, foodPos.z), Quaternion.Euler(0f, 90f, 0f));
             obstacles.Add(new Rect(foodPos.x - 0.5f, foodPos.z - 0.8f, 1.2f, 1.6f));
+
+            BuildKitchen(root, corner, wood, white);
         }
+
+        /// <summary>South-west corner: a counter with a stove (knob + burner + pot), a cutting board and the ingredients.</summary>
+        private void BuildKitchen(Transform root, float corner, Material wood, Material white)
+        {
+            float x0 = -corner, z0 = -corner;
+            float top = FloorY + 0.9f;
+            Material steel = TileFactory.CreateMaterial(new Color(0.6f, 0.62f, 0.65f));
+            Material dark = TileFactory.CreateMaterial(new Color(0.12f, 0.12f, 0.12f));
+
+            Box(root, "KitchenCounter", new Vector3(x0 + 0.3f, FloorY + 0.45f, z0), new Vector3(2.2f, 0.9f, 0.7f), wood);
+            Sign(root, "KITCHEN  廚房", new Vector3(x0 + 0.3f, 1.25f, -HalfSize + 0.06f), Quaternion.Euler(0f, 180f, 0f));
+            obstacles.Add(new Rect(x0 - 0.85f, z0 - 0.4f, 2.3f, 0.8f));
+
+            // Stove: a burner on the counter and a knob on the front edge.
+            GameObject burner = Cylinder(root, "Burner", new Vector3(x0 - 0.35f, top + 0.005f, z0), new Vector3(0.34f, 0.006f, 0.34f), dark);
+            burner.AddComponent<Interactable>().Kind = InteractKind.Stove;
+            Burner = burner.GetComponent<Renderer>();
+            Burner.sharedMaterial = new Material(dark);   // own copy: it glows when the stove is on
+            GameObject knob = Box(root, "StoveKnob", new Vector3(x0 - 0.35f, top - 0.08f, z0 + 0.37f), new Vector3(0.06f, 0.06f, 0.04f), white);
+            knob.AddComponent<Interactable>().Kind = InteractKind.Stove;
+
+            // Pot on the burner, with a disc of "contents" that changes colour.
+            GameObject pot = Cylinder(root, "Pot", new Vector3(x0 - 0.35f, top + 0.12f, z0), new Vector3(0.3f, 0.11f, 0.3f), steel);
+            pot.AddComponent<Interactable>().Kind = InteractKind.Pot;
+            PotContents = Cylinder(root, "PotContents", new Vector3(x0 - 0.35f, top + 0.235f, z0), new Vector3(0.26f, 0.004f, 0.26f), white);
+            Object.Destroy(PotContents.GetComponent<Collider>());
+            PotContents.GetComponent<Renderer>().sharedMaterial = new Material(white);
+            PotContents.SetActive(false);
+
+            // Cutting board and ingredients.
+            Box(root, "CuttingBoard", new Vector3(x0 + 0.35f, top + 0.012f, z0), new Vector3(0.45f, 0.025f, 0.3f), TileFactory.CreateMaterial(new Color(0.85f, 0.7f, 0.45f)));
+            AddIngredient(root, Ingredient.Chicken, PrimitiveType.Capsule, new Vector3(x0 + 0.8f, top + 0.06f, z0 - 0.12f),
+                new Vector3(0.12f, 0.06f, 0.12f), new Color(0.98f, 0.8f, 0.72f), Quaternion.Euler(0f, 0f, 90f));
+            AddIngredient(root, Ingredient.Onion, PrimitiveType.Sphere, new Vector3(x0 + 0.98f, top + 0.045f, z0 + 0.1f),
+                Vector3.one * 0.09f, new Color(0.75f, 0.55f, 0.35f), Quaternion.identity);
+            AddIngredient(root, Ingredient.Garlic, PrimitiveType.Sphere, new Vector3(x0 + 1.12f, top + 0.03f, z0 - 0.08f),
+                Vector3.one * 0.06f, new Color(0.96f, 0.95f, 0.88f), Quaternion.identity);
+            AddIngredient(root, Ingredient.Herbs, PrimitiveType.Cube, new Vector3(x0 + 1.25f, top + 0.02f, z0 + 0.1f),
+                new Vector3(0.12f, 0.03f, 0.08f), new Color(0.3f, 0.65f, 0.25f), Quaternion.Euler(0f, 25f, 0f));
+        }
+
+        private void AddIngredient(Transform root, Ingredient ingredient, PrimitiveType type, Vector3 pos, Vector3 scale, Color color, Quaternion rotation)
+        {
+            GameObject go = Prim(type, root, ingredient.ToString(), pos, scale, TileFactory.CreateMaterial(color));
+            go.transform.rotation = rotation;
+            go.AddComponent<Interactable>().Kind =
+                ingredient == Ingredient.Chicken ? InteractKind.Chicken
+                : ingredient == Ingredient.Onion ? InteractKind.Onion
+                : ingredient == Ingredient.Garlic ? InteractKind.Garlic
+                : InteractKind.Herbs;
+            Ingredients[ingredient] = go;
+        }
+
+        // Kitchen pieces the game recolours / hides as you cook.
+        public Renderer Burner { get; private set; }
+        public GameObject PotContents { get; private set; }
+        public readonly Dictionary<Ingredient, GameObject> Ingredients = new Dictionary<Ingredient, GameObject>();
 
         /// <summary>Half the width of the (square) room.</summary>
         public float HalfSize { get; }

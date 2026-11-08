@@ -207,6 +207,10 @@ namespace MahjongNight.Game
             }
             UpdateLife(now, dt);                 // you: needs, walking, your phone
             ctx = Seated;
+            if (stageStopped)                    // you just died
+                return;
+            UpdateCooking(now, dt);              // the kitchen and customers' orders
+            ctx = Seated;
             if (!standing)
                 UpdateHumanHead(dt);
 
@@ -859,8 +863,10 @@ namespace MahjongNight.Game
             {
                 DrawBetweenHands();
             }
-            DrawTablesOverview();
+            float overviewBottom = DrawTablesOverview();
+            DrawKitchenCard(overviewBottom + 8);
             DrawCallPanel();
+            DrawToast();
             DrawPhoneOverlay();
             DrawPopup();
         }

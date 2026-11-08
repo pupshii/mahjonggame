@@ -6,6 +6,7 @@ namespace MahjongNight.Game
     public sealed class AvatarView : MonoBehaviour
     {
         public int Seat { get; set; }
+        public int TableIndex { get; set; }
     }
 
     /// <summary>Where a player's right hand is during the pocket swap.</summary>
@@ -42,6 +43,8 @@ namespace MahjongNight.Game
         private readonly Transform carriedTile;
         private readonly Transform root;
         private readonly GameObject phone;
+        private readonly System.Collections.Generic.List<AvatarView> views = new System.Collections.Generic.List<AvatarView>();
+        private TextMesh bubble;
         private Vector3 gazeTarget;
 
         private readonly Vector3 origin;
@@ -138,6 +141,48 @@ namespace MahjongNight.Game
         /// <summary>Where the player's phone is held (they look here while texting or on a call).</summary>
         public Vector3 PhonePoint => World(PhonePos);
 
+        /// <summary>Which table this player sits at (so clicks / serving know where they are).</summary>
+        public int TableIndex
+        {
+            set
+            {
+                foreach (AvatarView v in views)
+                    v.TableIndex = value;
+            }
+        }
+
+        /// <summary>A speech bubble above the head (null hides it), turned to face the camera.</summary>
+        public void SetBubble(string text, Vector3 cameraPosition, Color color)
+        {
+            if (text == null)
+            {
+                if (bubble != null)
+                    bubble.gameObject.SetActive(false);
+                return;
+            }
+            if (bubble == null)
+            {
+                var go = new GameObject("Bubble");
+                go.transform.SetParent(root, false);
+                bubble = go.AddComponent<TextMesh>();
+                Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                bubble.font = font;
+                bubble.fontSize = 64;
+                bubble.characterSize = 0.02f;
+                bubble.anchor = TextAnchor.LowerCenter;
+                bubble.alignment = TextAlignment.Center;
+                go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
+            }
+            bubble.gameObject.SetActive(true);
+            bubble.text = text;
+            bubble.color = color;
+            Vector3 pos = TagPoint + Vector3.up * 0.12f;
+            bubble.transform.position = pos;
+            Vector3 away = pos - cameraPosition;
+            if (away.sqrMagnitude > 0.0001f)
+                bubble.transform.rotation = Quaternion.LookRotation(away);
+        }
+
         /// <summary>Show or hide the phone in their hands.</summary>
         public void SetPhone(bool on) => phone.SetActive(on);
 
@@ -223,7 +268,11 @@ namespace MahjongNight.Game
             if (removeCollider)
                 Object.Destroy(go.GetComponent<Collider>());
             else
-                go.AddComponent<AvatarView>().Seat = Seat;
+            {
+                var view = go.AddComponent<AvatarView>();
+                view.Seat = Seat;
+                views.Add(view);
+            }
             return go;
         }
     }

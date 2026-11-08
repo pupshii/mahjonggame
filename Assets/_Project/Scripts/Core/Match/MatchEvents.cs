@@ -33,6 +33,8 @@ namespace MahjongNight.Core
         SelfDrawnWin,
         CheatPenalty,
         FalseAccusation,
+        FoodTip,
+        FoodRefund,
     }
 
     /// <summary>Faan moving from one player to another.</summary>

@@ -43,6 +43,7 @@ namespace MahjongNight.Game
                 SitDown(seatedTable);
             using_ = null;
             ResetPhones();
+            ResetCooking();
         }
 
         /// <summary>Runs before the table logic each frame: needs, walking, interactions, phones.</summary>
@@ -75,8 +76,13 @@ namespace MahjongNight.Game
             {
                 walker.ApplyTo(cam);
                 UpdateInteractables(now);
-                if (Input.GetKeyDown(KeyCode.E) && lookingAtInteractable != null && !using_.HasValue && !OnPhone(HumanSeat))
-                    Use(lookingAtInteractable, now);
+                if (Input.GetKeyDown(KeyCode.E) && !using_.HasValue && !OnPhone(HumanSeat))
+                {
+                    if (lookingAtInteractable != null)
+                        Use(lookingAtInteractable, now);
+                    else if (lookingAtCustomer != null && carryingSoup)
+                        Serve(lookingAtCustomer);
+                }
                 int chair = NearestChair();
                 if (Input.GetKeyDown(KeyCode.F) && chair >= 0 && !using_.HasValue)
                     SitDown(chair);
@@ -128,8 +134,13 @@ namespace MahjongNight.Game
         private void UpdateInteractables(float now)
         {
             lookingAtInteractable = null;
-            if (Physics.Raycast(new Ray(cam.transform.position, cam.transform.forward), out RaycastHit hit, InteractRange))
-                lookingAtInteractable = hit.collider.GetComponent<Interactable>();
+            lookingAtCustomer = null;
+            if (Physics.Raycast(new Ray(cam.transform.position, cam.transform.forward), out RaycastHit hit, ServeRange))
+            {
+                if (hit.distance <= InteractRange)
+                    lookingAtInteractable = hit.collider.GetComponent<Interactable>();
+                lookingAtCustomer = hit.collider.GetComponent<AvatarView>();
+            }
 
             if (using_.HasValue && now >= usingUntil)
             {
@@ -138,6 +149,7 @@ namespace MahjongNight.Game
                     case InteractKind.Toilet: needs.UseToilet(); AddLog("Ahh. Much better."); break;
                     case InteractKind.Water: needs.Drink(); AddLog("You drink some water."); break;
                     case InteractKind.Food: needs.Eat(); AddLog("You eat a bun."); break;
+                    default: FinishSlicing(using_.Value); break;
                 }
                 using_ = null;
             }
@@ -151,9 +163,17 @@ namespace MahjongNight.Game
                 SitDown(thing.TableIndex);
                 return;
             }
+            if (TryCookingUse(thing, now))
+                return;
             double seconds = kind == InteractKind.Toilet ? needs.Rules.ToiletSeconds
                 : kind == InteractKind.Water ? needs.Rules.DrinkSeconds
                 : needs.Rules.EatSeconds;
+            StartTimedUse(kind, now, seconds);
+        }
+
+        /// <summary>Busy for a few seconds (toilet, drinking, eating, slicing) — you can't move meanwhile.</summary>
+        private void StartTimedUse(InteractKind kind, float now, double seconds)
+        {
             using_ = kind;
             usingStarted = now;
             usingUntil = now + (float)seconds;
@@ -244,7 +264,8 @@ namespace MahjongNight.Game
             if (using_.HasValue)
             {
                 float t = Mathf.Clamp01((Time.time - usingStarted) / Mathf.Max(0.01f, usingUntil - usingStarted));
-                string what = using_ == InteractKind.Toilet ? "Using the toilet" : using_ == InteractKind.Water ? "Drinking" : "Eating";
+                string what = UsingText(using_.Value)
+                    ?? (using_ == InteractKind.Toilet ? "Using the toilet" : using_ == InteractKind.Water ? "Drinking" : "Eating");
                 prompt = $"{what}…  {Mathf.RoundToInt(t * 100)}%";
             }
             else if (lookingAtInteractable != null)
@@ -255,7 +276,14 @@ namespace MahjongNight.Game
                     case InteractKind.Water: prompt = "E — drink water"; break;
                     case InteractKind.Food: prompt = "E — eat a bun"; break;
                     case InteractKind.Seat: prompt = $"E — sit down at table {lookingAtInteractable.TableIndex + 1}"; break;
+                    default: prompt = CookingPrompt(lookingAtInteractable.Kind); break;
                 }
+            }
+            else if (lookingAtCustomer != null && CustomerOrder(lookingAtCustomer) != null)
+            {
+                prompt = carryingSoup
+                    ? $"E — serve chicken soup to {BotName(lookingAtCustomer.Seat, lookingAtCustomer.TableIndex)}"
+                    : "They're waiting for chicken soup — go cook it!";
             }
             else if (NearestChair() >= 0)
             {

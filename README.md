@@ -56,10 +56,18 @@ git clone https://github.com/pupshii/mahjonggame.git
    your chairs to sit down at that table. Every table's countdown keeps running while you're up. If any bar hits 0 you die: every table stops, a death screen
    shows for 5 s, then the whole stage restarts (new matches everywhere, full bars, banked faan
    cleared). (Bots don't have bars yet.)
-8. **Between hands:** winners collect faan (discarder pays, or everyone on a self-draw); spend
+8. **Cooking (you're the club manager):** now and then a customer orders **chicken soup** (bubble
+   above their head with a 4-minute timer; at most 2 orders open). In the **kitchen** (south-west
+   corner): **E** the stove knob to turn it on → **E** the pot to fill it (30 s to boil) → **E**
+   the chicken, onion, garlic and herbs to slice each (5 s; do it while the water heats) → **E**
+   the pot to add them → simmer 60 s → **E** the pot to ladle a bowl → walk to the customer and
+   **E** them to serve (+8 faan tip at their table). About 1.5 minutes. Late orders cost you a
+   5 faan refund; a finished pot left on a lit stove burns after 60 s. The recipe card on the
+   right ticks off each step.
+9. **Between hands:** winners collect faan (discarder pays, or everyone on a self-draw); spend
    faan on upgrades (Sleight of Hand, Deep Pockets, Poker Face, Eagle Eye). Highest faan after
    8 hands wins.
-9. Inspector options on **Greybox Game**: Classic rules, choose-your-draw, match length,
+10. Inspector options on **Greybox Game**: Classic rules, choose-your-draw, match length,
    penalties, bot nerve / spot chance, pacing, reveal bot hands, fixed seed.
 
 ## Running tests

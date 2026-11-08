@@ -191,6 +191,12 @@ namespace MahjongNight.Core
             Pay(caller, accused, MatchRules.FalseAccusationFine, PaymentReason.FalseAccusation);
         }
 
+        /// <summary>
+        /// Moves faan between players outside of mahjong (e.g. a customer tipping the manager for
+        /// food, or a refund for a late order). Works in any phase.
+        /// </summary>
+        public void Transfer(int from, int to, int amount, PaymentReason reason) => Pay(from, to, amount, reason);
+
         // ------------------------------------------------------------------ upgrades
 
         public bool CanBuy(int seat, Upgrade upgrade, out int cost)

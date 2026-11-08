@@ -107,6 +107,7 @@ namespace MahjongNight.Game
                 {
                     int relative = (s - HumanSeat + HandState.SeatCount) % HandState.SeatCount;
                     t.Avatars[s] = new PlayerAvatar(transform, s, relative, SeatColors[s], firstPerson: s == HumanSeat, origin: t.Origin);
+                    t.Avatars[s].TableIndex = i;
                 }
 
                 var labelGo = new GameObject($"Table{i + 1}Label");
@@ -221,11 +222,12 @@ namespace MahjongNight.Game
             }
         }
 
-        /// <summary>Right-hand list of every table: your score there and whether it needs you.</summary>
-        private void DrawTablesOverview()
+        /// <summary>Right-hand list of every table: your score there and whether it needs you. Returns its bottom edge.</summary>
+        private float DrawTablesOverview()
         {
+            float top = Pad * 2 + LineHeight * 1.5f;
             if (tables.Count < 2)
-                return;
+                return top;
             TableContext keep = ctx;
             var lines = new List<string>();
             foreach (TableContext t in tables)
@@ -247,13 +249,14 @@ namespace MahjongNight.Game
 
             float w = lines.Max(l => TextWidth(textStyle, l)) + Pad * 2;
             float h = Pad * 2 + LineHeight * lines.Count;
-            Rect r = Panel(new Rect(Screen.width - w - Pad, Pad * 2 + LineHeight * 1.5f, w, h));
+            Rect r = Panel(new Rect(Screen.width - w - Pad, top, w, h));
             float y = r.y + Pad;
             foreach (string line in lines)
             {
                 GUI.Label(new Rect(r.x + Pad, y, r.width - Pad * 2, LineHeight), line, textStyle);
                 y += LineHeight;
             }
+            return r.yMax;
         }
     }
 }
