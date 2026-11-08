@@ -17,6 +17,7 @@ namespace MahjongNight.Game
         private Kitchen kitchen;
         private OrderBook orders;
         private bool carryingSoup;
+        private double carriedQuality;   // how good the bowl you're carrying is (0-100)
         private AvatarView lookingAtCustomer;
         private PotStage lastPotStage;
         private string toastText;
@@ -43,6 +44,7 @@ namespace MahjongNight.Game
             kitchen = new Kitchen();
             orders = new OrderBook(OrderRules.Default(), (ulong)System.DateTime.Now.Ticks, Time.time);
             carryingSoup = false;
+            CancelMiniGame();
             lastPotStage = PotStage.Empty;
             toastText = null;
             foreach (TableContext t in tables)
@@ -90,38 +92,97 @@ namespace MahjongNight.Game
 
         // ------------------------------------------------------------------ using kitchen things
 
-        /// <summary>Handles E on a kitchen object. Returns false if it isn't one.</summary>
+        private static Color IngredientColour(Ingredient i) =>
+            i == Ingredient.Chicken ? new Color(0.98f, 0.8f, 0.72f)
+            : i == Ingredient.Onion ? new Color(0.75f, 0.55f, 0.35f)
+            : i == Ingredient.Garlic ? new Color(0.96f, 0.95f, 0.88f)
+            : new Color(0.3f, 0.65f, 0.25f);
+
+        private static int Pieces(Ingredient i) => i == Ingredient.Chicken ? 5 : i == Ingredient.Garlic ? 3 : 4;
+
+        /// <summary>
+        /// Handles E on a kitchen object — every step is a short mouse mini-game, scored, and the
+        /// scores add up to how good the soup is (and so how big the tip). Returns false if it
+        /// isn't a kitchen object.
+        /// </summary>
         private bool TryCookingUse(Interactable thing, float now)
         {
             string error;
             switch (thing.Kind)
             {
                 case InteractKind.Stove:
-                    kitchen.ToggleStove();
-                    ShowToast(kitchen.StoveOn ? "You turn the stove on." : "You turn the stove off.");
+                    if (kitchen.StoveOn)
+                    {
+                        kitchen.ToggleStove();
+                        ShowToast("You turn the stove off.");
+                    }
+                    else
+                    {
+                        StartMiniGame(new IgniteGame(Range(0.55f, 0.85f)), score =>
+                        {
+                            kitchen.ToggleStove();
+                            kitchen.RecordScore(CookStep.Ignite, score);
+                            ShowToast(kitchen.Stage == PotStage.Empty ? "The stove is on. Fill the pot!" : "The stove is on.");
+                        });
+                    }
                     return true;
 
                 case InteractKind.Pot:
                     switch (kitchen.Stage)
                     {
                         case PotStage.Empty:
-                            kitchen.TryFillPot(out _);
-                            ShowToast(kitchen.StoveOn ? "You fill the pot with water. Now wait for it to boil." : "You fill the pot with water. Turn the stove on!");
+                            StartMiniGame(new PourGame("FILL THE POT", "water", Range(0.68f, 0.82f),
+                                new Color(0.45f, 0.7f, 1f), new Color(0.55f, 0.57f, 0.6f), 0.32f), score =>
+                            {
+                                kitchen.TryFillPot(out _);
+                                kitchen.RecordScore(CookStep.Fill, score);
+                                ShowToast(kitchen.StoveOn ? "Now wait for it to boil — slice the ingredients meanwhile." : "Turn the stove on!");
+                            });
                             break;
                         case PotStage.Boiling:
-                            if (kitchen.TryAddIngredients(out error))
-                                ShowToast("Everything goes into the pot. Let it simmer.");
-                            else
+                            if (!kitchen.AllSliced)
+                            {
+                                kitchen.TryAddIngredients(out error);
                                 ShowToast(error);
+                                break;
+                            }
+                            StartMiniGame(new AddToPotGame(Kitchen.Recipe.Select(i => (i, IngredientColour(i))).ToList()), score =>
+                            {
+                                kitchen.TryAddIngredients(out _);
+                                kitchen.RecordScore(CookStep.AddToPot, score);
+                                ShowToast("Everything's in. Let it simmer — and give it a stir (E on the pot)!");
+                            });
+                            break;
+                        case PotStage.Simmering:
+                            if (kitchen.HasScore(CookStep.Stir))
+                                ShowToast("You've stirred it. Now let it simmer.");
+                            else
+                                StartMiniGame(new StirGame(), score =>
+                                {
+                                    kitchen.RecordScore(CookStep.Stir, score);
+                                    ShowToast("Smells amazing. Let it simmer.");
+                                });
                             break;
                         case PotStage.Done:
                             if (carryingSoup)
-                                ShowToast("Your hands are full — serve the bowl you're carrying first.");
-                            else if (kitchen.TryLadle(out _))
                             {
-                                carryingSoup = true;
-                                ShowToast("You ladle a bowl of chicken soup. Take it to the customer!");
+                                ShowToast("Your hands are full — serve the bowl you're carrying first.");
+                                break;
                             }
+                            StartMiniGame(new PourGame("LADLE A BOWL", "the soup", Range(0.6f, 0.8f),
+                                new Color(0.95f, 0.78f, 0.35f), new Color(0.95f, 0.95f, 0.95f), 0.42f), score =>
+                            {
+                                kitchen.RecordScore(CookStep.Ladle, score);
+                                if (!kitchen.TryLadle(out string err))
+                                {
+                                    ShowToast(err);   // burnt while you were ladling
+                                    return;
+                                }
+                                carryingSoup = true;
+                                carriedQuality = kitchen.LastBowlQuality;
+                                DishGrade g = CookingScore.Grade(carriedQuality);
+                                ShowToast($"Chicken soup: {GradeWord(g)} ({Mathf.RoundToInt((float)carriedQuality)}/100). Take it to the customer!");
+                            });
                             break;
                         case PotStage.Burnt:
                             kitchen.TryDump(out _);
@@ -137,15 +198,29 @@ namespace MahjongNight.Game
                     Ingredient? ingredient = IngredientOf(thing.Kind);
                     if (!ingredient.HasValue)
                         return false;
-                    if (kitchen.IsSliced(ingredient.Value))
-                        ShowToast($"The {Lower(ingredient.Value)} is already sliced.");
+                    Ingredient ing = ingredient.Value;
+                    if (kitchen.IsSliced(ing))
+                        ShowToast($"The {Lower(ing)} is already sliced.");
                     else if (kitchen.Stage == PotStage.Simmering || kitchen.Stage == PotStage.Done)
                         ShowToast("This pot already has its ingredients.");
                     else
-                        StartTimedUse(thing.Kind, now, kitchen.Rules.SliceSeconds); // slicing takes a few seconds
+                        StartMiniGame(new SliceGame(ing, IngredientColour(ing), Pieces(ing), () => Range(0f, 1f)), score =>
+                        {
+                            if (kitchen.TrySlice(ing, out string err))
+                            {
+                                kitchen.RecordScore(CookStep.Slice, score);
+                                if (kitchen.AllSliced)
+                                    ShowToast("Everything's sliced. Add it once the water boils.");
+                            }
+                            else
+                                ShowToast(err);
+                        });
                     return true;
             }
         }
+
+        private static string GradeWord(DishGrade g) =>
+            g == DishGrade.Perfect ? "PERFECT" : g == DishGrade.Great ? "great" : g == DishGrade.Ok ? "OK" : "pretty bad";
 
         /// <summary>Called when a timed slicing action finishes.</summary>
         private void FinishSlicing(InteractKind kind)
@@ -163,21 +238,24 @@ namespace MahjongNight.Game
         {
             switch (kind)
             {
-                case InteractKind.Stove: return kitchen.StoveOn ? "E — turn the stove off" : "E — turn the stove on";
+                case InteractKind.Stove: return kitchen.StoveOn ? "E — turn the stove off" : "E — light the stove";
                 case InteractKind.Pot:
                     switch (kitchen.Stage)
                     {
                         case PotStage.Empty: return "E — fill the pot with water";
                         case PotStage.Heating: return kitchen.StoveOn ? $"Heating… {Mathf.RoundToInt((float)kitchen.Progress * 100)}%" : "The stove is off";
                         case PotStage.Boiling: return kitchen.AllSliced ? "E — add the ingredients" : "Boiling — slice the ingredients";
-                        case PotStage.Simmering: return $"Simmering… {Mathf.RoundToInt((float)kitchen.Progress * 100)}%";
+                        case PotStage.Simmering:
+                            return kitchen.HasScore(CookStep.Stir)
+                                ? $"Simmering… {Mathf.RoundToInt((float)kitchen.Progress * 100)}%"
+                                : $"E — stir! (simmering {Mathf.RoundToInt((float)kitchen.Progress * 100)}%)";
                         case PotStage.Done: return carryingSoup ? "Serve the bowl you're carrying first" : "E — ladle a bowl of soup";
                         default: return "E — throw out the burnt soup";
                     }
                 default:
                     Ingredient? i = IngredientOf(kind);
                     if (!i.HasValue) return null;
-                    return kitchen.IsSliced(i.Value) ? $"The {Lower(i.Value)} is sliced" : $"E — slice the {Lower(i.Value)} ({kitchen.Rules.SliceSeconds:0}s)";
+                    return kitchen.IsSliced(i.Value) ? $"The {Lower(i.Value)} is sliced" : $"E — slice the {Lower(i.Value)}";
             }
         }
 
@@ -203,14 +281,21 @@ namespace MahjongNight.Game
             }
             orders.Deliver(order);
             carryingSoup = false;
+            DishGrade grade = CookingScore.Grade(carriedQuality);
+            int tip = Mathf.Max(1, orders.Rules.Tip + CookingScore.TipBonus(grade));
             TableContext keep = ctx;
             ctx = tables[order.TableIndex];
-            match.Transfer(order.Seat, HumanSeat, orders.Rules.Tip, PaymentReason.FoodTip);
+            match.Transfer(order.Seat, HumanSeat, tip, PaymentReason.FoodTip);
             FlushMatchEvents();
             ctx = keep;
             string who = BotName(order.Seat, order.TableIndex);
-            AddLog($"You serve {who} at table {order.TableIndex + 1} — they tip you {orders.Rules.Tip} faan.");
-            ShowToast($"Served! {who} tips you {orders.Rules.Tip} faan.");
+            string verdict = grade == DishGrade.Perfect ? "\"This is the best soup I've ever had!\""
+                : grade == DishGrade.Great ? "\"Delicious!\""
+                : grade == DishGrade.Ok ? "\"…It's soup.\""
+                : "\"Is this… raw?\"";
+            AddLog($"You serve {who} at table {order.TableIndex + 1} ({GradeWord(grade)} soup) — they tip you {tip} faan.");
+            ShowToast($"Served! {verdict} {who} tips you {tip} faan.");
+            ShowGrade(CookingScore.Shout(grade) + $"\n<size={Mathf.RoundToInt(Unit * 1.6f)}>+{tip} faan</size>", GradeColor(grade));
         }
 
         // ------------------------------------------------------------------ visuals & UI
@@ -290,12 +375,19 @@ namespace MahjongNight.Game
             lines.Add($"  {Check(kitchen.AllSliced || added)} Slice: " + string.Join("  ", Kitchen.Recipe.Select(i =>
                 (kitchen.IsSliced(i) || added ? "<color=#70e070>" : "<color=#aaa>") + Lower(i) + "</color>")));
             lines.Add($"  {Check(added)} Add everything to the boiling pot");
-            lines.Add($"  {Check(cooked)} Simmer (60s){simmer}");
+            lines.Add($"  {Check(kitchen.HasScore(CookStep.Stir) || cooked)} Stir it while it simmers (60s){simmer}");
             if (cooked)
                 lines.Add($"  <color=#ffcc40>Ready! Ladle it — burns in {Mathf.CeilToInt((float)kitchen.SecondsUntilBurnt)}s</color>");
             if (kitchen.Stage == PotStage.Burnt)
                 lines.Add("  <color=#ff5050>Burnt! Throw it out (E on the pot).</color>");
-            lines.Add(carryingSoup ? "<color=#70e070>Carrying a bowl — E on the customer to serve.</color>" : $"<color=#aaa>Next: {kitchen.NextStep()}</color>");
+            if (kitchen.Quality > 0 && kitchen.Stage != PotStage.Empty)
+            {
+                DishGrade g = CookingScore.Grade(kitchen.Quality);
+                lines.Add($"  Soup so far: <color=#{ColorUtility.ToHtmlStringRGB(GradeColor(g))}>{GradeWord(g)} ({Mathf.RoundToInt((float)kitchen.Quality)})</color>");
+            }
+            lines.Add(carryingSoup
+                ? $"<color=#70e070>Carrying a bowl ({GradeWord(CookingScore.Grade(carriedQuality))}) — E on the customer to serve.</color>"
+                : $"<color=#aaa>Next: {kitchen.NextStep()}</color>");
 
             float w = lines.Max(l => TextWidth(textStyle, l)) + Pad * 2;
             float h = Pad * 2 + LineHeight * lines.Count;

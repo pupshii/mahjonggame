@@ -24,7 +24,7 @@ namespace MahjongNight.Game
 
         /// <summary>Is there UI on screen that needs a free mouse cursor?</summary>
         private bool CursorNeeded =>
-            OnPhone(HumanSeat) || phonePanelOpen || (popupText != null && Time.time <= popupUntil);
+            OnPhone(HumanSeat) || phonePanelOpen || InMiniGame || (popupText != null && Time.time <= popupUntil);
 
         /// <summary>Does the human (rather than a bot) play this seat right now?</summary>
         private bool HumanControls(int seat) => seat == HumanSeat && humanAlive;
@@ -79,7 +79,8 @@ namespace MahjongNight.Game
             {
                 walker.ApplyTo(cam);
                 UpdateInteractables(now);
-                if (Input.GetKeyDown(KeyCode.E) && !using_.HasValue && !OnPhone(HumanSeat))
+                UpdateMiniGame(dt);
+                if (Input.GetKeyDown(KeyCode.E) && !using_.HasValue && !OnPhone(HumanSeat) && !InMiniGame)
                 {
                     if (lookingAtInteractable != null)
                         Use(lookingAtInteractable, now);
@@ -87,7 +88,7 @@ namespace MahjongNight.Game
                         Serve(lookingAtCustomer);
                 }
                 int chair = NearestChair();
-                if (Input.GetKeyDown(KeyCode.F) && chair >= 0 && !using_.HasValue)
+                if (Input.GetKeyDown(KeyCode.F) && chair >= 0 && !using_.HasValue && !InMiniGame)
                     SitDown(chair);
             }
             else if (humanAlive && Input.GetKeyDown(KeyCode.F) && !OnPhone(HumanSeat)
@@ -196,6 +197,7 @@ namespace MahjongNight.Game
         private void Die(Need cause)
         {
             humanAlive = false;
+            CancelMiniGame();
             deathMessage = SurvivalNeeds.DeathMessage(cause);
             if (standing)
                 SitDown(seatedTable);
@@ -268,7 +270,11 @@ namespace MahjongNight.Game
             GUI.Label(new Rect(cx - 10, cy - 12, 20, 24), "+", centerStyle);
 
             string prompt = null;
-            if (using_.HasValue)
+            if (InMiniGame)
+            {
+                // the mini-game panel says what to do
+            }
+            else if (using_.HasValue)
             {
                 float t = Mathf.Clamp01((Time.time - usingStarted) / Mathf.Max(0.01f, usingUntil - usingStarted));
                 string what = HomeUsingText(using_.Value) ?? UsingText(using_.Value)

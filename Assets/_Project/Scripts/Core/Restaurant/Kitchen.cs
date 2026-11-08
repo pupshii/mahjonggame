@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace MahjongNight.Core
@@ -40,6 +41,10 @@ namespace MahjongNight.Core
         public static readonly Ingredient[] Recipe = { Ingredient.Chicken, Ingredient.Onion, Ingredient.Garlic, Ingredient.Herbs };
 
         private readonly HashSet<Ingredient> sliced = new HashSet<Ingredient>();
+        private readonly Dictionary<CookStep, List<double>> scores = new Dictionary<CookStep, List<double>>();
+
+        /// <summary>A pot nobody stirred counts as this (out of 100).</summary>
+        public const double UnstirredScore = 50;
 
         public Kitchen(KitchenRules rules = null)
         {
@@ -65,6 +70,46 @@ namespace MahjongNight.Core
         public double SecondsUntilBurnt => Stage == PotStage.Done ? Rules.BurnAfterSeconds - StageTime : 0;
 
         public void ToggleStove() => StoveOn = !StoveOn;
+
+        /// <summary>Records how well a mini-game went (0–100) for the dish in the pot.</summary>
+        public void RecordScore(CookStep step, double score)
+        {
+            if (!scores.TryGetValue(step, out List<double> list))
+                scores[step] = list = new List<double>();
+            list.Add(Math.Max(0, Math.Min(100, score)));
+        }
+
+        public bool HasScore(CookStep step) => scores.ContainsKey(step);
+
+        /// <summary>
+        /// The dish so far (0–100): the average of each step's average score. Once the
+        /// ingredients are in, a pot nobody stirred counts as <see cref="UnstirredScore"/>.
+        /// 0 before anything is recorded.
+        /// </summary>
+        public double Quality
+        {
+            get
+            {
+                double total = 0;
+                int count = 0;
+                foreach (KeyValuePair<CookStep, List<double>> kv in scores)
+                {
+                    double sum = 0;
+                    foreach (double v in kv.Value) sum += v;
+                    total += sum / kv.Value.Count;
+                    count++;
+                }
+                if (!scores.ContainsKey(CookStep.Stir) && Stage >= PotStage.Simmering && Stage != PotStage.Burnt)
+                {
+                    total += UnstirredScore;
+                    count++;
+                }
+                return count == 0 ? 0 : total / count;
+            }
+        }
+
+        /// <summary>The quality of the last bowl ladled (see <see cref="Quality"/>).</summary>
+        public double LastBowlQuality { get; private set; }
 
         public bool TryFillPot(out string error)
         {
@@ -123,6 +168,7 @@ namespace MahjongNight.Core
                 return false;
             }
             error = null;
+            LastBowlQuality = Quality;
             Reset();
             return true;
         }
@@ -176,6 +222,11 @@ namespace MahjongNight.Core
 
         private void Reset()
         {
+            // The stove's score stays (it's still lit for the next pot); everything else starts over.
+            List<double> ignite = scores.TryGetValue(CookStep.Ignite, out List<double> l) ? l : null;
+            scores.Clear();
+            if (ignite != null)
+                scores[CookStep.Ignite] = ignite;
             sliced.Clear();
             SetStage(PotStage.Empty);
         }

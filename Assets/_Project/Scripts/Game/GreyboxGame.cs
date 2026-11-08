@@ -881,6 +881,7 @@ namespace MahjongNight.Game
             float overviewBottom = DrawTablesOverview();
             DrawKitchenCard(overviewBottom + 8);
             DrawCallPanel();
+            DrawMiniGame();
             DrawToast();
             DrawPhoneOverlay();
             DrawPopup();

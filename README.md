@@ -65,6 +65,10 @@ git clone https://github.com/pupshii/mahjonggame.git
    Latte to pet them (a little less hungry, 30 s cooldown). The tables play on while you're out.
    When you walk in, Latte runs to the door, **stands up on their hind legs and claps** ("FINALLY!!
    NOW. FOOD."), and keeps standing up to clap by the rug every few seconds until you feed them.
+   Latte **walks like a person** — up on their hind legs, arms swinging, a little waddle — and
+   drops to all fours when they get there. **E** their **blue ball** to throw it: Latte fetches it
+   back to your feet (a little less hungry, like petting). Left alone they boop it around the rug.
+   (A starving Latte won't play: food first.)
 7. **Survival:** Food, Water and Pee bars drain over time (walking/sprinting drains food and
    water faster; drinking fills your bladder). Press **F** to stand up, **WASD** to walk,
    **Shift** to sprint, **E** to use the toilet / water jar / food counter, **F** behind any of
@@ -73,12 +77,20 @@ git clone https://github.com/pupshii/mahjonggame.git
    cleared). (Bots don't have bars yet.)
 8. **Cooking (you're the club manager):** now and then a customer orders **chicken soup** (bubble
    above their head with a 4-minute timer; at most 2 orders open). In the **kitchen** (south-west
-   corner): **E** the stove knob to turn it on → **E** the pot to fill it (30 s to boil) → **E**
-   the chicken, onion, garlic and herbs to slice each (5 s; do it while the water heats) → **E**
-   the pot to add them → simmer 60 s → **E** the pot to ladle a bowl → walk to the customer and
-   **E** them to serve (+8 faan tip at their table). About 1.5 minutes. Late orders cost you a
-   5 faan refund; a finished pot left on a lit stove burns after 60 s. The recipe card on the
-   right ticks off each step.
+   corner) every step is a quick **mouse mini-game**, scored PERFECT / GREAT / OK / OOPS:
+   - **E the stove knob — Light the stove:** a needle sweeps back and forth; click in the flame.
+   - **E the pot — Fill it:** hold the mouse button to pour, let go at the dashed line (it pours
+     faster near the top — overfill and you spill). Then 30 s to boil.
+   - **E the chicken / onion / garlic / herbs — Slice:** hold the button above the ingredient
+     and swipe DOWN through each dashed guide (do it while the water heats).
+   - **E the boiling pot — Into the pot!:** drag every ingredient into the pot, fast.
+   - **E the simmering pot — Stir!:** circle the mouse around the pot, 6 laps (skip it and the
+     soup counts as half-stirred). Simmers 60 s.
+   - **E the pot — Ladle a bowl:** pour up to the line again.
+   - Walk to the customer and **E** them to serve. The soup's grade (shown on the recipe card as
+     you go) sets the tip: 8 faan base, **+5 PERFECT, +2 GREAT, 0 OK, -4 OOPS**.
+   A phone call or text knocks you out of a mini-game (just try again). Late orders cost you a
+   5 faan refund; a finished pot left on a lit stove burns after 60 s.
 9. **Between hands:** winners collect faan (discarder pays, or everyone on a self-draw); spend
    faan on upgrades (Sleight of Hand, Deep Pockets, Poker Face, Eagle Eye). Highest faan after
    8 hands wins.

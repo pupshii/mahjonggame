@@ -40,7 +40,11 @@ namespace MahjongNight.Game
         {
             if (humanAlive)
                 dog.Tick(dt);
-            home.Dog.Tick(dt, dog, cam.transform.position, atHome);
+            if (home.Dog.Tick(dt, dog, cam.transform.position, atHome))
+            {
+                // Latte dropped the ball at your feet. Playing is (a little) as good as petting.
+                ShowToast(dog.TryPet() ? "Latte brings the ball back! Good dog. (a little less hungry)" : "Latte brings the ball back! Again! Again!");
+            }
 
             DogMood mood = dog.Mood;
             if (mood != lastDogMood && mood > lastDogMood)
@@ -170,6 +174,14 @@ namespace MahjongNight.Game
                 case InteractKind.Dog:
                     StartTimedUse(thing.Kind, now, PetSeconds);
                     return true;
+                case InteractKind.Ball:
+                    bool willFetch = dog.Mood != DogMood.Starving && !dog.IsEating;
+                    if (!home.Dog.ThrowBall(cam.transform.position, cam.transform.forward, willFetch))
+                        ShowToast("Latte has the ball. Wait for them to bring it back!");
+                    else
+                        ShowToast(willFetch ? "You throw the ball. Latte's after it!"
+                            : dog.IsEating ? "Latte is busy eating." : "Latte watches it roll away. FOOD first.");
+                    return true;
                 default:
                     return false;
             }
@@ -231,6 +243,8 @@ namespace MahjongNight.Game
                         : "Empty bowl — get a scoop from the dog food bag";
                 case InteractKind.Dog:
                     return $"E — pet Latte ({Dog.Describe(dog.Mood)})";
+                case InteractKind.Ball:
+                    return home.Dog.BallInMouth ? "Latte has the ball" : "E — throw the ball for Latte";
                 default:
                     return null;
             }

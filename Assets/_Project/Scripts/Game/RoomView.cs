@@ -23,6 +23,7 @@ namespace MahjongNight.Game
         DogFood,    // the bag of dog food: take a scoop
         DogBowl,    // fill it (or give them your chicken soup)
         Dog,        // pet them
+        Ball,       // Latte's blue ball: throw it
     }
 
     /// <summary>Marks a room object you can use with E.</summary>
