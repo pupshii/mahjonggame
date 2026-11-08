@@ -29,7 +29,9 @@ namespace MahjongNight.Game
         [SerializeField] private float botTurnDelay = 0.8f;
         [SerializeField] private float botClaimDelay = 0.5f;
         [Tooltip("Seconds before you auto-discard / auto-pass. 0 = no limit.")]
-        [SerializeField] private float humanTimeLimit = 20f;
+        [SerializeField] private float humanTimeLimit = 30f;
+        [Tooltip("Only one table's turn clock runs at a time: the table you're sitting at, else the one that's waited longest. The rest are on hold.")]
+        [SerializeField] private bool staggerTurnClocks = true;
 
         [Header("Bots")]
         [Tooltip("0 = bots take any legal win; 1 = bots chase big hands (one suit, all pungs) and turn down cheap wins early in a hand.")]
@@ -133,7 +135,8 @@ namespace MahjongNight.Game
         private void NewMatch()
         {
             ulong matchSeed = seedSource.NextUInt64();
-            match = new ScoreMatch(rules, matchRules, matchSeed);
+            // Each table starts with a different dealer, so your turns there don't all line up.
+            match = new ScoreMatch(rules, matchRules, matchSeed, firstDealer: ctx.Index % HandState.SeatCount);
             ctx.Banked = false;
             loggedMatchEvents = 0;
             for (int s = 0; s < HandState.SeatCount; s++)
@@ -214,6 +217,7 @@ namespace MahjongNight.Game
             if (!standing)
                 UpdateHumanHead(dt);
 
+            TickTurnClocks(dt);                  // one turn clock at a time (see staggerTurnClocks)
             foreach (TableContext t in tables)   // every table plays on, with or without you
             {
                 ctx = t;
@@ -246,7 +250,7 @@ namespace MahjongNight.Game
         {
             // Same countdown at every table, sitting there or not — that's the scramble.
             float limit = HumanTimeLimitHere();
-            if (HumanActions().Count > 0 && limit > 0f && now - humanWaitStart > limit)
+            if (HumanActions().Count > 0 && limit > 0f && ctx.ClockUsed > limit)
             {
                 AutoPlayHuman();
                 return;
@@ -330,11 +334,12 @@ namespace MahjongNight.Game
         {
             FlushHandEvents();
             hoveredTile = null;
-            humanWaitStart = Time.time;
+            ctx.ClockUsed = 0f;            // a fresh wait (if the table now waits on you)
+            ctx.WaitingSince = Time.time;
             float delay = Hand.Phase == HandPhase.AwaitingAction ? botTurnDelay
                 : Hand.Phase == HandPhase.AwaitingDraw ? botTurnDelay * 0.6f
                 : botClaimDelay;
-            nextBotTime = Time.time + delay;
+            nextBotTime = Time.time + delay * ctx.Pace;
             if (Hand.Phase == HandPhase.Ended && match.Phase == MatchPhase.PlayingHand)
                 OnHandEnded();
             RebuildTable();
@@ -1218,7 +1223,7 @@ namespace MahjongNight.Game
             DrawBottomPanel(null, lines, labels, actions, centered: true);
         }
 
-        private int SecondsLeft() => Mathf.Max(0, Mathf.CeilToInt(HumanTimeLimitHere() - (Time.time - humanWaitStart)));
+        private int SecondsLeft() => Mathf.Max(0, Mathf.CeilToInt(HumanTimeLimitHere() - ctx.ClockUsed));
 
         /// <summary>
         /// How long the current table waits for you: the full turn timer for your turn (and for
@@ -1227,11 +1232,14 @@ namespace MahjongNight.Game
         /// </summary>
         private float HumanTimeLimitHere()
         {
-            bool claimWindow = Hand != null && (Hand.Phase == HandPhase.AwaitingClaims || Hand.Phase == HandPhase.AwaitingRobKong);
-            return claimWindow && !AtThisTable ? Mathf.Min(AwayClaimSeconds, humanTimeLimit) : humanTimeLimit;
+            return AwayClaim ? Mathf.Min(AwayClaimSeconds, humanTimeLimit) : humanTimeLimit;
         }
 
-        private const float AwayClaimSeconds = 4f;
+        /// <summary>A claim chance at a table you're not sitting at: short, and its clock always runs.</summary>
+        private bool AwayClaim => Hand != null && !AtThisTable &&
+                                  (Hand.Phase == HandPhase.AwaitingClaims || Hand.Phase == HandPhase.AwaitingRobKong);
+
+        private const float AwayClaimSeconds = 6f;
 
         /// <summary>Newbie hint: which tiles would complete the hand (only between turns).</summary>
         private string ReadyHint()

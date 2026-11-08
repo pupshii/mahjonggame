@@ -26,9 +26,12 @@ git clone https://github.com/pupshii/mahjonggame.git
 1. Menu bar → **Mahjong Night → Create Greybox Scene** (first time only; commit the scene).
    Later: **Mahjong Night → Open Greybox Scene**. Press **Play**.
    **Five tables:** you hold a seat at 5 tables at once, each with its own 3 bots and its own
-   match. A sign above every table counts down whenever it's waiting on you ("YOUR TURN 14s"); when
-   it hits 0 your move there is played for you. Claim chances at tables you're away from only wait
-   4 s. Press **F** to get up, walk to another table, stand behind your chair and press **F** (or
+   match. A sign above every table shows a 30 s turn clock whenever it's waiting on you ("YOUR TURN
+   14s"); when it hits 0 your move there is played for you. Only **one clock runs at a time**: the
+   table you're sitting at, otherwise the one that has waited longest; the others say "on hold #2"
+   and keep their time. Tables also start with different dealers and their bots play at different
+   speeds, so your turns are spread out. Claim chances at tables you're away from only wait 6 s
+   (and always count down). Press **F** to get up, walk to another table, stand behind your chair and press **F** (or
    **E** on the chair) to sit down and play there. The right-hand panel lists every table's status.
    When a table finishes its match it starts a new one by itself after a short break (your faan
    there is banked into your running total); the other tables never stop.
@@ -53,7 +56,7 @@ git clone https://github.com/pupshii/mahjonggame.git
 7. **Survival:** Food, Water and Pee bars drain over time (walking/sprinting drains food and
    water faster; drinking fills your bladder). Press **F** to stand up, **WASD** to walk,
    **Shift** to sprint, **E** to use the toilet / water jar / food counter, **F** behind any of
-   your chairs to sit down at that table. Every table's countdown keeps running while you're up. If any bar hits 0 you die: every table stops, a death screen
+   your chairs to sit down at that table. Your turn clocks keep running while you're up (one at a time). If any bar hits 0 you die: every table stops, a death screen
    shows for 5 s, then the whole stage restarts (new matches everywhere, full bars, banked faan
    cleared). (Bots don't have bars yet.)
 8. **Cooking (you're the club manager):** now and then a customer orders **chicken soup** (bubble

@@ -142,6 +142,17 @@ namespace MahjongNight.Core.Tests
         }
 
         [Test]
+        public void FirstDealer_DealsTheFirstHand()
+        {
+            var match = new ScoreMatch(RuleSet.Party(), MatchRules.Default(), 1, firstDealer: 2);
+            match.StartHand();
+            Assert.That(match.Dealer, Is.EqualTo(2));
+            Assert.That(match.Hand.CurrentSeat, Is.EqualTo(2), "East (the dealer) acts first");
+            Assert.That(match.Hand.Seats[2].Concealed, Has.Count.EqualTo(14));
+            Assert.Throws<System.ArgumentOutOfRangeException>(() => new ScoreMatch(RuleSet.Party(), MatchRules.Default(), 1, firstDealer: 4));
+        }
+
+        [Test]
         public void PocketSwap_TradesTileIntoPocketSlot()
         {
             var match = new ScoreMatch(RuleSet.Party(), MatchRules.Default(), 1);

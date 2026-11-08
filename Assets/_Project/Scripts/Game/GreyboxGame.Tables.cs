@@ -39,7 +39,9 @@ namespace MahjongNight.Game
             public readonly float[] LookingDownFor = new float[HandState.SeatCount];
             public TableView View;
             public float NextBotTime;
-            public float HumanWaitStart;
+            public float Pace = 1f;      // multiplies this table's bot delays, so tables drift apart
+            public float ClockUsed;      // seconds of your turn clock used up on the current wait
+            public float WaitingSince;   // when the current wait began (queue order)
             public int LoggedHandEvents;
             public int LoggedMatchEvents;
             public List<string> ResultLines = new List<string>();
@@ -76,7 +78,6 @@ namespace MahjongNight.Game
         private float[] lookingDownFor => ctx.LookingDownFor;
         private TableView table => ctx.View;
         private float nextBotTime { get => ctx.NextBotTime; set => ctx.NextBotTime = value; }
-        private float humanWaitStart { get => ctx.HumanWaitStart; set => ctx.HumanWaitStart = value; }
         private int loggedHandEvents { get => ctx.LoggedHandEvents; set => ctx.LoggedHandEvents = value; }
         private int loggedMatchEvents { get => ctx.LoggedMatchEvents; set => ctx.LoggedMatchEvents = value; }
         private List<string> resultLines { get => ctx.ResultLines; set => ctx.ResultLines = value; }
@@ -101,7 +102,8 @@ namespace MahjongNight.Game
             List<Vector3> origins = TableOrigins(tableCount);
             for (int i = 0; i < origins.Count; i++)
             {
-                var t = new TableContext { Index = i, Origin = origins[i] };
+                // Bots at each table play at their own pace (1.0x - 1.6x), so turns drift apart.
+                var t = new TableContext { Index = i, Origin = origins[i], Pace = 1f + 0.15f * (i * 2 % 5) };
                 t.View = new TableView(transform, factory, t.Origin);
                 for (int s = 0; s < HandState.SeatCount; s++)
                 {
@@ -187,6 +189,42 @@ namespace MahjongNight.Game
         /// <summary>Is this table waiting on you right now?</summary>
         private bool WaitingOnHuman => HandLive && humanAlive && Hand.GetLegalActions(HumanSeat).Count > 0;
 
+        /// <summary>
+        /// Tables waiting on you whose turn clock is in line, in order: the table you're sitting at
+        /// first, then the one that has waited longest. Only the first one's clock runs.
+        /// Rebuilt every frame by <see cref="TickTurnClocks"/>.
+        /// </summary>
+        private readonly List<TableContext> turnQueue = new List<TableContext>();
+
+        /// <summary>
+        /// Runs the turn clocks. With <see cref="staggerTurnClocks"/>, only the front of the queue
+        /// counts down and the others are on hold; claim chances at tables you're away from
+        /// always count down (they're short, and would stall that table otherwise).
+        /// </summary>
+        private void TickTurnClocks(float dt)
+        {
+            turnQueue.Clear();
+            foreach (TableContext t in tables)
+            {
+                ctx = t;
+                if (!WaitingOnHuman)
+                    continue;
+                if (AwayClaim || !staggerTurnClocks)
+                    t.ClockUsed += dt;
+                else
+                    turnQueue.Add(t);
+            }
+            ctx = Seated;
+            if (turnQueue.Count == 0)
+                return;
+            TableContext seated = standing ? null : Seated;
+            turnQueue.Sort((a, b) => a == b ? 0 : a == seated ? -1 : b == seated ? 1 : a.WaitingSince.CompareTo(b.WaitingSince));
+            turnQueue[0].ClockUsed += dt;
+        }
+
+        /// <summary>0 = this table's clock is running, 1+ = on hold behind that many tables, -1 = not queued.</summary>
+        private int QueuePlace => turnQueue.IndexOf(ctx);
+
         /// <summary>The sign floating above the table: its number and, when it's waiting on you, a countdown.</summary>
         private void UpdateTableLabel(float now)
         {
@@ -202,8 +240,17 @@ namespace MahjongNight.Game
             {
                 int secs = SecondsLeft();
                 bool claim = Hand.Phase == HandPhase.AwaitingClaims || Hand.Phase == HandPhase.AwaitingRobKong;
-                label.text = $"{title}\n{(claim ? "CLAIM?" : "YOUR TURN")}  {secs}s";
-                label.color = secs <= 5 ? new Color(1f, 0.25f, 0.2f) : secs <= 10 ? new Color(1f, 0.75f, 0.2f) : new Color(1f, 1f, 0.6f);
+                int place = QueuePlace;
+                if (place > 0)
+                {
+                    label.text = $"{title}\n{(claim ? "CLAIM?" : "YOUR TURN")}  {secs}s  (on hold, #{place + 1})";
+                    label.color = new Color(0.75f, 0.75f, 0.55f);
+                }
+                else
+                {
+                    label.text = $"{title}\n{(claim ? "CLAIM?" : "YOUR TURN")}  {secs}s";
+                    label.color = secs <= 5 ? new Color(1f, 0.25f, 0.2f) : secs <= 10 ? new Color(1f, 0.75f, 0.2f) : new Color(1f, 1f, 0.6f);
+                }
             }
             else if (match.Phase == MatchPhase.BetweenHands)
             {
@@ -234,7 +281,9 @@ namespace MahjongNight.Game
             {
                 ctx = t;
                 bool claim = Hand.Phase == HandPhase.AwaitingClaims || Hand.Phase == HandPhase.AwaitingRobKong;
-                string status = WaitingOnHuman
+                string status = WaitingOnHuman && QueuePlace > 0
+                    ? $"<color=#b8b890>{(claim ? "CLAIM?" : "YOUR TURN")} {SecondsLeft()}s · on hold #{QueuePlace + 1}</color>"
+                    : WaitingOnHuman
                     ? $"<color={(SecondsLeft() <= 5 ? "#ff5050" : "#ffcc40")}>{(claim ? "CLAIM?" : "YOUR TURN")} {SecondsLeft()}s</color>"
                     : match.Phase == MatchPhase.MatchOver ? "new match soon"
                     : match.Phase == MatchPhase.BetweenHands ? "between hands"

@@ -52,10 +52,15 @@ namespace MahjongNight.Core
         private readonly List<MatchEvent> events = new List<MatchEvent>();
         private int dealerPasses;
 
-        public ScoreMatch(RuleSet rules, MatchRules matchRules, ulong seed)
+        /// <param name="firstDealer">Who deals the first hand (East). Several tables can start with
+        /// different dealers so their turns don't all line up.</param>
+        public ScoreMatch(RuleSet rules, MatchRules matchRules, ulong seed, int firstDealer = 0)
         {
             Rules = rules ?? throw new ArgumentNullException(nameof(rules));
             MatchRules = matchRules ?? throw new ArgumentNullException(nameof(matchRules));
+            if (firstDealer < 0 || firstDealer >= HandState.SeatCount)
+                throw new ArgumentOutOfRangeException(nameof(firstDealer));
+            Dealer = firstDealer;
             rng = new SeededRandom(seed);
             for (int s = 0; s < players.Length; s++)
                 players[s] = new MatchPlayer(s, matchRules.StartingScore);

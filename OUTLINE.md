@@ -137,7 +137,7 @@ fails and they lose their turn.
 |---|---|---|
 | Minimum faan to win | 3 | 3 |
 | Drawing | Random from the wall (Choose-your-draw available as an option) | Random from the wall |
-| Turn timer | 10 s (auto-discard on timeout) | 20 s |
+| Turn timer | 10 s (auto-discard on timeout) | 30 s, one table's clock at a time |
 | Claim window | 3 s | 5 s |
 | Match structure | 8 hands, highest faan wins | 4 rounds (E/S/W/N) |
 | Payouts | Discarder pays the winner the hand's faan; self-drawn → everyone pays | Same |

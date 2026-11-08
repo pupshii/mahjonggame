@@ -298,7 +298,7 @@ namespace MahjongNight.Game
                 GUI.Label(r, prompt, new GUIStyle(titleStyle) { alignment = TextAnchor.MiddleCenter });
             }
 
-            const string help = "Each table's countdown keeps running while you're up.   WASD move · Shift sprint · E use · F sit (behind your chair)";
+            const string help = "One table's turn clock runs at a time — the one that's waited longest.   WASD move · Shift sprint · E use · F sit (behind your chair)";
             float hw = TextWidth(logStyle, help) + Pad * 2;
             var hr = new Rect((Screen.width - hw) / 2f, Screen.height - LineHeight - Pad * 2, hw, LineHeight + Pad);
             GUI.Box(hr, GUIContent.none, boxStyle);
