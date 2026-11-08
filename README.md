@@ -30,6 +30,8 @@ git clone https://github.com/pupshii/mahjonggame.git
    it hits 0 your move there is played for you. Claim chances at tables you're away from only wait
    4 s. Press **F** to get up, walk to another table, stand behind your chair and press **F** (or
    **E** on the chair) to sit down and play there. The right-hand panel lists every table's status.
+   When a table finishes its match it starts a new one by itself after a short break (your faan
+   there is banked into your running total); the other tables never stop.
 2. **Look around with the cursor:** the middle of the screen is calm; push to the left/right
    edges to watch the players beside you, the top edge to look across, the **bottom edge to look
    down** into your lap.

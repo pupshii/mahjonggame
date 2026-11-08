@@ -45,6 +45,9 @@ namespace MahjongNight.Game
             public List<string> ResultLines = new List<string>();
             public readonly List<string> PaymentLines = new List<string>();
             public float AutoNextHandAt = -1f;
+            public bool Banked;          // this match's result has been added to BankedFaan
+            public int BankedFaan;       // your faan from finished matches at this table
+            public int MatchesPlayed;
             public TextMesh Label;
 
             // Bots' phones at this table (yours is global — you only have one phone).
@@ -121,16 +124,19 @@ namespace MahjongNight.Game
             seatedTable = 0;
         }
 
-        /// <summary>Starts a fresh match at every table (and resets you).</summary>
+        /// <summary>Starts a fresh match at every table, resets you, and clears your banked faan.</summary>
         private void NewMatchAll()
         {
+            ctx = Seated;
+            ResetLife();
             foreach (TableContext t in tables)
             {
                 ctx = t;
+                t.BankedFaan = 0;
+                t.MatchesPlayed = 0;
                 NewMatch();
             }
             ctx = Seated;
-            ResetLife();
         }
 
         /// <summary>Everything one table does in a frame (bots, cheats, spotting, turns, labels).</summary>
@@ -157,6 +163,10 @@ namespace MahjongNight.Game
             else if (match.Phase == MatchPhase.BetweenHands && ctx.AutoNextHandAt > 0f && now >= ctx.AutoNextHandAt)
             {
                 StartHand();
+            }
+            else if (match.Phase == MatchPhase.MatchOver && ctx.AutoNextHandAt > 0f && now >= ctx.AutoNextHandAt)
+            {
+                NewMatch(); // renew just this table; the others carry on
             }
 
             avatars[HumanSeat].SetVisible(AtThisTable || (ctx == Seated && !humanAlive));
@@ -201,8 +211,8 @@ namespace MahjongNight.Game
             }
             else if (match.Phase == MatchPhase.MatchOver)
             {
-                label.text = $"{title}\nmatch over";
-                label.color = new Color(0.7f, 0.7f, 0.7f);
+                label.text = $"{title}\nnew match in {Mathf.Max(0, Mathf.CeilToInt(ctx.AutoNextHandAt - now))}s";
+                label.color = new Color(0.7f, 0.9f, 1f);
             }
             else
             {
@@ -224,14 +234,16 @@ namespace MahjongNight.Game
                 bool claim = Hand.Phase == HandPhase.AwaitingClaims || Hand.Phase == HandPhase.AwaitingRobKong;
                 string status = WaitingOnHuman
                     ? $"<color={(SecondsLeft() <= 5 ? "#ff5050" : "#ffcc40")}>{(claim ? "CLAIM?" : "YOUR TURN")} {SecondsLeft()}s</color>"
-                    : match.Phase == MatchPhase.MatchOver ? "match over"
+                    : match.Phase == MatchPhase.MatchOver ? "new match soon"
                     : match.Phase == MatchPhase.BetweenHands ? "between hands"
                     : $"hand {match.HandNumber}/{matchRules.HandsPerMatch}";
                 string you = t == Seated && !standing ? "  (you)" : "";
-                lines.Add($"Table {t.Index + 1}: {match.Players[HumanSeat].Score} faan · {status}{you}");
+                string banked = t.MatchesPlayed > 0 ? $" (+{t.BankedFaan} banked)" : "";
+                lines.Add($"Table {t.Index + 1}: {match.Players[HumanSeat].Score} faan{banked} · {status}{you}");
             }
             ctx = keep;
-            lines.Add($"Total: {tables.Sum(t => t.Match.Players[HumanSeat].Score)} faan");
+            int total = tables.Sum(t => t.BankedFaan + (t.Banked ? 0 : t.Match.Players[HumanSeat].Score));
+            lines.Add($"Total (all matches): {total} faan");
 
             float w = lines.Max(l => TextWidth(textStyle, l)) + Pad * 2;
             float h = Pad * 2 + LineHeight * lines.Count;

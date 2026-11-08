@@ -134,11 +134,32 @@ namespace MahjongNight.Game
         {
             ulong matchSeed = seedSource.NextUInt64();
             match = new ScoreMatch(rules, matchRules, matchSeed);
+            ctx.Banked = false;
             loggedMatchEvents = 0;
             for (int s = 0; s < HandState.SeatCount; s++)
                 brains[s] = s == HumanSeat ? null : new BotBrain(s, matchSeed + (ulong)s * 31UL);
             AddLog($"New match: {matchRules.HandsPerMatch} hands (seed {matchSeed}).");
+            if (!humanAlive)
+                match.Eliminate(HumanSeat, "already dead"); // a new match doesn't bring you back
             StartHand();
+        }
+
+        /// <summary>
+        /// Called when a hand finishes: schedules the next hand (or, after the last hand, a new match
+        /// at this table) and banks your faan when a match ends, so restarting doesn't lose it.
+        /// </summary>
+        private void ScheduleNext()
+        {
+            ctx.AutoNextHandAt = Time.time + autoNextHandSeconds * (AtThisTable ? 2.5f : 1f); // time to shop / read
+            if (match.Phase == MatchPhase.MatchOver && !ctx.Banked)
+            {
+                ctx.Banked = true;
+                ctx.BankedFaan += match.Players[HumanSeat].Score;
+                ctx.MatchesPlayed++;
+                bool won = match.Winners.Contains(HumanSeat);
+                AddLog($"Match over — {(won ? "you win this table!" : "winner: " + string.Join(", ", match.Winners.Select(SeatName)))} " +
+                       $"You banked {match.Players[HumanSeat].Score} faan here. A new match starts shortly.");
+            }
         }
 
         private void StartHand()
@@ -332,7 +353,7 @@ namespace MahjongNight.Game
             match.ResolveHand();
             FlushMatchEvents();
             BotsShop();
-            ctx.AutoNextHandAt = Time.time + autoNextHandSeconds * (AtThisTable ? 2.5f : 1f); // time to shop
+            ScheduleNext();
         }
 
         private void RebuildTable()
@@ -576,7 +597,7 @@ namespace MahjongNight.Game
             FlushMatchEvents();
             FlushHandEvents();
             BotsShop();
-            ctx.AutoNextHandAt = Time.time + autoNextHandSeconds * (AtThisTable ? 2.5f : 1f);
+            ScheduleNext();
             if (cheater == HumanSeat || caller == HumanSeat || AtThisTable)
                 ShowPopup("出千!  Caught cheating!", resultLines[0].Replace(" 出千!", ""));
             RebuildTable();
@@ -1358,8 +1379,14 @@ namespace MahjongNight.Game
                 lines.Add(youWon
                     ? (match.Winners.Count > 1 ? "MATCH OVER — you share first place!" : "MATCH OVER — YOU WIN!")
                     : "MATCH OVER — winner: " + string.Join(", ", match.Winners.Select(SeatName)));
-                labels.Add("New match");
-                actions.Add(NewMatchAll); // restarts every table
+                lines.Add($"A new match starts here in {Mathf.Max(0, Mathf.CeilToInt(ctx.AutoNextHandAt - Time.time))}s — the other tables keep playing.");
+                labels.Add("<b>Next match now</b>");
+                actions.Add(NewMatch);
+                if (tables.Count > 1)
+                {
+                    labels.Add("Restart all tables");
+                    actions.Add(NewMatchAll);
+                }
             }
             else
             {
