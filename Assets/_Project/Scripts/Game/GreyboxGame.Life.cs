@@ -159,23 +159,63 @@ namespace MahjongNight.Game
             usingUntil = now + (float)seconds;
         }
 
+        private const float DeathScreenSeconds = 5f;
+
+        private bool stageStopped;      // you died: every table is frozen until the restart
+        private float restartAt;
+        private string deathMessage;
+
+        /// <summary>You died: stop every table, show the death screen, then restart the whole stage.</summary>
         private void Die(Need cause)
         {
             humanAlive = false;
-            string message = SurvivalNeeds.DeathMessage(cause);
+            deathMessage = SurvivalNeeds.DeathMessage(cause);
             if (standing)
                 SitDown(seatedTable);
-            foreach (TableContext t in tables)   // out at every table
+            foreach (TableContext t in tables)
             {
                 ctx = t;
                 CancelCheats();
-                match.Eliminate(HumanSeat, message);
-                FlushMatchEvents();
-                nextBotTime = Time.time + 0.5f;
             }
             ctx = Seated;
-            AddLog("YOU DIED. " + message);
-            ShowPopup("YOU DIED", message + "\nHouse bots take over your seats. You can't win.");
+            if (OnPhone(HumanSeat))
+                PutPhoneAway(HumanSeat);
+            phonePanelOpen = false;
+            popupText = null;
+            stageStopped = true;
+            restartAt = Time.time + DeathScreenSeconds;
+            AddLog("YOU DIED. " + deathMessage + " The stage restarts…");
+        }
+
+        private void RestartStage()
+        {
+            stageStopped = false;
+            SitDown(0);        // back to the middle table
+            NewMatchAll();     // resets you, your bars, and every table
+            AddLog("— The stage restarts. Good luck. —");
+        }
+
+        /// <summary>Full-screen "you died" card with a countdown to the restart.</summary>
+        private void DrawDeathScreen()
+        {
+            var full = new Rect(0, 0, Screen.width, Screen.height);
+            uiRects.Add(full);
+            GUI.Box(full, GUIContent.none, boxStyle);
+            GUI.Box(full, GUIContent.none, boxStyle); // twice for a darker veil
+
+            float cy = Screen.height * 0.38f;
+            var big = new GUIStyle(titleStyle) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(Unit * 3.5f) };
+            GUI.Label(new Rect(0, cy, Screen.width, Unit * 5), "<color=#ff4040>YOU DIED</color>", big);
+            GUI.Label(new Rect(0, cy + Unit * 5, Screen.width, LineHeight * 1.5f), deathMessage, new GUIStyle(titleStyle) { alignment = TextAnchor.MiddleCenter });
+            int secs = Mathf.Max(0, Mathf.CeilToInt(restartAt - Time.time));
+            GUI.Label(new Rect(0, cy + Unit * 7.5f, Screen.width, LineHeight), $"All tables stopped. The stage restarts in {secs}s.", centerStyle);
+
+            float bw = Unit * 10;
+            if (GUI.Button(new Rect((Screen.width - bw) / 2f, cy + Unit * 10, bw, Unit * 2.4f), "<b>Restart now</b>", buttonStyle))
+            {
+                RestartStage();
+                GUIUtility.ExitGUI();
+            }
         }
 
         // ------------------------------------------------------------------ HUD

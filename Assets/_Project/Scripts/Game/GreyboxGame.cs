@@ -199,6 +199,12 @@ namespace MahjongNight.Game
             float dt = Time.deltaTime;
 
             ctx = Seated;
+            if (stageStopped)                    // you died: everything stays frozen until the restart
+            {
+                if (now >= restartAt)
+                    RestartStage();
+                return;
+            }
             UpdateLife(now, dt);                 // you: needs, walking, your phone
             ctx = Seated;
             if (!standing)
@@ -764,6 +770,13 @@ namespace MahjongNight.Game
             if (match == null || Hand == null)
                 return;
             EnsureStyles();
+            if (stageStopped)
+            {
+                if (Event.current.type == EventType.Layout)
+                    uiRects.Clear();
+                DrawDeathScreen();
+                return;
+            }
 
             Event e = Event.current;
             if (e.type == EventType.Layout)

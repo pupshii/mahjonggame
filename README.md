@@ -53,8 +53,9 @@ git clone https://github.com/pupshii/mahjonggame.git
 7. **Survival:** Food, Water and Pee bars drain over time (walking/sprinting drains food and
    water faster; drinking fills your bladder). Press **F** to stand up, **WASD** to walk,
    **Shift** to sprint, **E** to use the toilet / water jar / food counter, **F** behind any of
-   your chairs to sit down at that table. Every table's countdown keeps running while you're up. If any bar hits 0
-   you die: a house bot takes your seat and you can't win the match. (Bots don't have bars yet.)
+   your chairs to sit down at that table. Every table's countdown keeps running while you're up. If any bar hits 0 you die: every table stops, a death screen
+   shows for 5 s, then the whole stage restarts (new matches everywhere, full bars, banked faan
+   cleared). (Bots don't have bars yet.)
 8. **Between hands:** winners collect faan (discarder pays, or everyone on a self-draw); spend
    faan on upgrades (Sleight of Hand, Deep Pockets, Poker Face, Eagle Eye). Highest faan after
    8 hands wins.
