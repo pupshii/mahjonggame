@@ -4,7 +4,7 @@ using UnityEngine;
 namespace MahjongNight.Game
 {
     /// <summary>
-    /// Mochi, your dog, waits at home and gets hungrier as the night goes on. A content dog
+    /// Latte, your dog, waits at home and gets hungrier as the night goes on. A content dog
     /// leaves you alone; a peckish one texts now and then; a hungry one texts a lot; a starving
     /// one phones you, howling. To make it stop: go out the club's front door (a few seconds'
     /// walk), scoop some dog food from the bag, fill the bowl, and head back. Bring a bowl of
@@ -45,13 +45,13 @@ namespace MahjongNight.Game
             DogMood mood = dog.Mood;
             if (mood != lastDogMood && mood > lastDogMood)
             {
-                if (mood == DogMood.Hungry) ShowToast("Mochi is getting hungry. Expect a lot of texts.");
-                else if (mood == DogMood.Starving) ShowToast("Mochi is STARVING. Go home (front door) and feed them!");
+                if (mood == DogMood.Hungry) ShowToast("Latte is getting hungry. Expect a lot of texts.");
+                else if (mood == DogMood.Starving) ShowToast("Latte is STARVING. Go home (front door) and feed them!");
             }
             lastDogMood = mood;
         }
 
-        /// <summary>When the next message from Mochi should come, given how hungry they are.</summary>
+        /// <summary>When the next message from Latte should come, given how hungry they are.</summary>
         private void ScheduleDogMessages(float now)
         {
             (double Min, double Max)? gap = dog.MessageGap;
@@ -64,8 +64,8 @@ namespace MahjongNight.Game
             humanNextDogText = Mathf.Min(humanNextDogText, now + (float)gap.Value.Max);
         }
 
-        /// <summary>A message from Mochi: a text, or — if they're starving — a howling phone call.</summary>
-        private void StartMochiMessage(float now)
+        /// <summary>A message from Latte: a text, or — if they're starving — a howling phone call.</summary>
+        private void StartLatteMessage(float now)
         {
             (double Min, double Max) gap = dog.MessageGap ?? (60, 120);
             humanNextDogText = now + Range((float)gap.Min, (float)gap.Max);
@@ -73,24 +73,24 @@ namespace MahjongNight.Game
             {
                 SetPhone(HumanSeat, new PhoneState
                 {
-                    From = "Mochi (home)",
+                    From = "Latte (home)",
                     Message = StarvingCalls[phoneRng.NextInt(StarvingCalls.Length)],
                     IsDogText = false,
-                    IsMochi = true,
+                    IsLatte = true,
                     MinUntil = now,
                     Until = now + Range(5f, 6.5f),
                 });
                 OnPhoneStarted(HumanSeat);
-                AddLog("Mochi is calling you. They're starving.");
+                AddLog("Latte is calling you. They're starving.");
                 return;
             }
             string[] texts = dog.Mood == DogMood.Hungry ? HungryTexts : DogTexts;
             SetPhone(HumanSeat, new PhoneState
             {
-                From = "Mochi (home)",
+                From = "Latte (home)",
                 Message = texts[phoneRng.NextInt(texts.Length)],
                 IsDogText = true,
-                IsMochi = true,
+                IsLatte = true,
                 MinUntil = now + DogTextMinRead,
                 Until = now + Range(3f, 5f),
             });
@@ -121,7 +121,7 @@ namespace MahjongNight.Game
             string hint = atHome ? "  (you're home)"
                 : dog.Mood >= DogMood.Hungry ? "  — go home (front door) and feed them!" : "";
             string treat = dog.TreatLeft > 0 ? "  · full of soup" : "";
-            return $"Mochi: <color={color}>{Dog.Describe(dog.Mood)}</color> {Bar(dog.Fullness)}{treat}{hint}";
+            return $"Latte: <color={color}>{Dog.Describe(dog.Mood)}</color> {Bar(dog.Fullness)}{treat}{hint}";
         }
 
         // ------------------------------------------------------------------ using things
@@ -139,28 +139,28 @@ namespace MahjongNight.Game
                     if (carryingKibble)
                         ShowToast("You already have a scoop of dog food. Fill the bowl!");
                     else if (carryingSoup)
-                        ShowToast("Your hands are full — you're carrying chicken soup (Mochi would love it…).");
+                        ShowToast("Your hands are full — you're carrying chicken soup (Latte would love it…).");
                     else
                         StartTimedUse(thing.Kind, now, ScoopSeconds);
                     return true;
                 case InteractKind.DogBowl:
                     if (dog.IsEating)
-                        ShowToast("Mochi is busy eating.");
+                        ShowToast("Latte is busy eating.");
                     else if (carryingSoup)
                     {
                         carryingSoup = false;
                         dog.FeedTreat();
                         lastDogMood = dog.Mood;
-                        ShowToast("You give Mochi the chicken soup. Best. Night. Ever. They'll stay full for longer.");
-                        AddLog("Mochi had your chicken soup. Very happy dog.");
+                        ShowToast("You give Latte the chicken soup. Best. Night. Ever. They'll stay full for longer.");
+                        AddLog("Latte had your chicken soup. Very happy dog.");
                     }
                     else if (carryingKibble)
                     {
                         carryingKibble = false;
                         dog.Feed();
                         lastDogMood = dog.Mood;
-                        ShowToast("You fill the bowl. Mochi dives in. No more texts for a while.");
-                        AddLog("You fed Mochi.");
+                        ShowToast("You fill the bowl. Latte dives in. No more texts for a while.");
+                        AddLog("You fed Latte.");
                     }
                     else
                     {
@@ -183,8 +183,8 @@ namespace MahjongNight.Game
                 case InteractKind.FrontDoor:
                     atHome = true;
                     walker.Place(home.Spawn, 0f);
-                    ShowToast($"You're home. Mochi is {Dog.Describe(dog.Mood)}.");
-                    AddLog("You head home to see Mochi. The tables play on without you.");
+                    ShowToast($"You're home. Latte is {Dog.Describe(dog.Mood)}.");
+                    AddLog("You head home to see Latte. The tables play on without you.");
                     return true;
                 case InteractKind.HomeDoor:
                     atHome = false;
@@ -200,12 +200,12 @@ namespace MahjongNight.Game
                     if (dog.TryPet())
                     {
                         home.Dog.Hop();
-                        ShowToast("You pet Mochi. Good dog. (a little less hungry)");
+                        ShowToast("You pet Latte. Good dog. (a little less hungry)");
                     }
                     else
                     {
                         home.Dog.Hop();
-                        ShowToast("Mochi loves it, but they still want food.");
+                        ShowToast("Latte loves it, but they still want food.");
                     }
                     return true;
                 default:
@@ -218,18 +218,18 @@ namespace MahjongNight.Game
             switch (kind)
             {
                 case InteractKind.FrontDoor:
-                    return $"E — go home to Mochi ({TripSeconds:0}s walk; Mochi is {Dog.Describe(dog.Mood)})";
+                    return $"E — go home to Latte ({TripSeconds:0}s walk; Latte is {Dog.Describe(dog.Mood)})";
                 case InteractKind.HomeDoor:
                     return $"E — head back to the club ({TripSeconds:0}s walk)";
                 case InteractKind.DogFood:
                     return carryingKibble ? "You've got a scoop — fill the bowl" : "E — take a scoop of dog food";
                 case InteractKind.DogBowl:
-                    return dog.IsEating ? "Mochi is eating"
-                        : carryingSoup ? "E — give Mochi your chicken soup (a treat: stays full longer)"
+                    return dog.IsEating ? "Latte is eating"
+                        : carryingSoup ? "E — give Latte your chicken soup (a treat: stays full longer)"
                         : carryingKibble ? "E — fill the bowl"
                         : "Empty bowl — get a scoop from the dog food bag";
                 case InteractKind.Dog:
-                    return $"E — pet Mochi ({Dog.Describe(dog.Mood)})";
+                    return $"E — pet Latte ({Dog.Describe(dog.Mood)})";
                 default:
                     return null;
             }
@@ -242,7 +242,7 @@ namespace MahjongNight.Game
                 case InteractKind.FrontDoor: return "Walking home";
                 case InteractKind.HomeDoor: return "Walking back to the club";
                 case InteractKind.DogFood: return "Scooping dog food";
-                case InteractKind.Dog: return "Petting Mochi";
+                case InteractKind.Dog: return "Petting Latte";
                 default: return null;
             }
         }

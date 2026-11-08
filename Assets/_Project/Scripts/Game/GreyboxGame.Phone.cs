@@ -22,7 +22,7 @@ namespace MahjongNight.Game
             public string From;
             public string Message;
             public bool IsDogText;
-            public bool IsMochi;       // from your own dog (feed them to make it stop)
+            public bool IsLatte;       // from your own dog (feed them to make it stop)
             public float MinUntil;     // can't put it down before this
             public float Until;        // calls and bot texts end by themselves
             public bool Replied;
@@ -98,10 +98,10 @@ namespace MahjongNight.Game
             }
             else if (humanAlive)
             {
-                // How often Mochi messages you depends on how hungry they are (see GreyboxGame.Home).
+                // How often Latte messages you depends on how hungry they are (see GreyboxGame.Home).
                 ScheduleDogMessages(now);
                 if (now >= humanNextDogText && dog.MessageGap != null && !atHome)
-                    StartMochiMessage(now);
+                    StartLatteMessage(now);
             }
 
             // Reply to the dog with 1-3 (no mouse needed).
@@ -275,9 +275,9 @@ namespace MahjongNight.Game
             var wrap = new GUIStyle(textStyle) { wordWrap = true };
             GUI.Label(new Rect(x, y, iw, LineHeight * 3), p.Message, wrap);
             y += LineHeight * 3.2f;
-            if (p.IsMochi)
+            if (p.IsLatte)
             {
-                GUI.Label(new Rect(x, y - LineHeight * 0.9f, iw, LineHeight), "<color=#ffcc40>Feed Mochi to make this stop: front door → home.</color>", logStyle);
+                GUI.Label(new Rect(x, y - LineHeight * 0.9f, iw, LineHeight), "<color=#ffcc40>Feed Latte to make this stop: front door → home.</color>", logStyle);
                 y += LineHeight * 0.3f;
             }
 

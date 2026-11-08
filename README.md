@@ -56,13 +56,13 @@ git clone https://github.com/pupshii/mahjonggame.git
    onto your phone until you reply, and you can't act at the table meanwhile. Press **P** (or
    **1-3**) to call another player: they stare at their phone for ~5 s (45 s cooldown). Bots
    text too, and may call *you* when you're watching them too closely.
-   **Mochi (your dog)** texts more the hungrier they get: *content* → no texts, *peckish* →
+   **Latte (your black-and-white border collie)** texts more the hungrier they get: *content* → no texts, *peckish* →
    every 70–120 s, *hungry* → every 35–60 s, *starving* → they **phone you howling** every
-   15–30 s. The status panel shows Mochi's bar. To feed them: walk to the club's **front door**
+   15–30 s. The status panel shows Latte's bar. To feed them: walk to the club's **front door**
    (middle of the south wall, "HOME 回家") and press **E** (6 s walk) → at home, **E** the dog
    food bag to take a scoop (2 s) → **E** the red bowl → **E** your front door to walk back (6 s).
    Give them a bowl of your **chicken soup** instead and they stay full for longer; **E** on
-   Mochi to pet them (a little less hungry, 30 s cooldown). The tables play on while you're out.
+   Latte to pet them (a little less hungry, 30 s cooldown). The tables play on while you're out.
 7. **Survival:** Food, Water and Pee bars drain over time (walking/sprinting drains food and
    water faster; drinking fills your bladder). Press **F** to stand up, **WASD** to walk,
    **Shift** to sprint, **E** to use the toilet / water jar / food counter, **F** behind any of

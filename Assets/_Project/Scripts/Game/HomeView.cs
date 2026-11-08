@@ -6,7 +6,7 @@ namespace MahjongNight.Game
 {
     /// <summary>
     /// Your flat, a short (teleporting) walk from the club: a couch, the dog's bowl, a bag of
-    /// dog food, and Mochi. Built off to the side of the club and registered with the room as
+    /// dog food, and Latte. Built off to the side of the club and registered with the room as
     /// a separate walkable area.
     /// </summary>
     public sealed class HomeView
@@ -82,7 +82,7 @@ namespace MahjongNight.Game
     }
 
     /// <summary>
-    /// Mochi: a little primitive dog. Wags faster the happier they are, droops when starving,
+    /// Latte: a little black-and-white border collie made of primitives. Wags faster the happier they are, droops when starving,
     /// trots to the bowl to eat when you fill it, and hops when you pet them.
     /// </summary>
     public sealed class DogView
@@ -106,39 +106,57 @@ namespace MahjongNight.Game
             food = bowlFood;
             foodMat = bowlFood.GetComponent<Renderer>().sharedMaterial;
 
-            root = new GameObject("Mochi").transform;
+            root = new GameObject("Latte").transform;
             root.SetParent(parent, false);
             root.position = restPosition;
 
-            Material fur = TileFactory.CreateMaterial(new Color(0.86f, 0.62f, 0.32f));
-            Material darkFur = TileFactory.CreateMaterial(new Color(0.55f, 0.35f, 0.18f));
-            Material black = TileFactory.CreateMaterial(new Color(0.05f, 0.05f, 0.05f));
+            // A black-and-white border collie: black coat; white collar, chest, muzzle, blaze,
+            // front legs, paws and tail tip; amber eyes; semi-pricked ears with folded tips.
+            Material black = TileFactory.CreateMaterial(new Color(0.06f, 0.06f, 0.07f));
+            Material white = TileFactory.CreateMaterial(new Color(0.95f, 0.95f, 0.93f));
+            Material nose = TileFactory.CreateMaterial(new Color(0.02f, 0.02f, 0.02f));
+            Material amber = TileFactory.CreateMaterial(new Color(0.6f, 0.38f, 0.12f));
 
-            GameObject body = Part(PrimitiveType.Capsule, root, "Body", new Vector3(0f, 0.32f, 0f), new Vector3(0.28f, 0.25f, 0.28f), fur);
+            GameObject body = Part(PrimitiveType.Capsule, root, "Body", new Vector3(0f, 0.33f, -0.02f), new Vector3(0.25f, 0.28f, 0.25f), black);
             body.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            Part(PrimitiveType.Sphere, root, "Chest", new Vector3(0f, 0.32f, 0.2f), new Vector3(0.19f, 0.22f, 0.15f), white);
+            GameObject collar = Part(PrimitiveType.Cylinder, root, "Collar", new Vector3(0f, 0.42f, 0.2f), new Vector3(0.2f, 0.04f, 0.2f), white);
+            collar.transform.localRotation = Quaternion.Euler(-35f, 0f, 0f);
             for (int i = 0; i < 4; i++)
             {
-                float x = i % 2 == 0 ? -0.08f : 0.08f, z = i < 2 ? 0.15f : -0.15f;
-                Part(PrimitiveType.Cylinder, root, "Leg" + i, new Vector3(x, 0.11f, z), new Vector3(0.07f, 0.11f, 0.07f), fur);
+                bool front = i < 2;
+                float x = i % 2 == 0 ? -0.07f : 0.07f, z = front ? 0.16f : -0.17f;
+                Part(PrimitiveType.Cylinder, root, "Leg" + i, new Vector3(x, 0.11f, z), new Vector3(0.065f, 0.11f, 0.065f), front ? white : black);
+                Part(PrimitiveType.Cylinder, root, "Paw" + i, new Vector3(x, 0.025f, z + 0.01f), new Vector3(0.075f, 0.025f, 0.08f), white);
             }
 
             head = new GameObject("HeadPivot").transform;
             head.SetParent(root, false);
-            head.localPosition = new Vector3(0f, 0.45f, 0.25f);
-            Part(PrimitiveType.Sphere, head, "Head", Vector3.zero, Vector3.one * 0.22f, fur);
-            Part(PrimitiveType.Cube, head, "Snout", new Vector3(0f, -0.03f, 0.13f), new Vector3(0.1f, 0.08f, 0.12f), fur);
-            Part(PrimitiveType.Sphere, head, "Nose", new Vector3(0f, -0.01f, 0.2f), Vector3.one * 0.04f, black);
-            Part(PrimitiveType.Sphere, head, "EyeL", new Vector3(-0.05f, 0.03f, 0.095f), Vector3.one * 0.03f, black);
-            Part(PrimitiveType.Sphere, head, "EyeR", new Vector3(0.05f, 0.03f, 0.095f), Vector3.one * 0.03f, black);
-            Part(PrimitiveType.Cube, head, "EarL", new Vector3(-0.08f, 0.09f, -0.02f), new Vector3(0.05f, 0.1f, 0.03f), darkFur);
-            Part(PrimitiveType.Cube, head, "EarR", new Vector3(0.08f, 0.09f, -0.02f), new Vector3(0.05f, 0.1f, 0.03f), darkFur);
+            head.localPosition = new Vector3(0f, 0.48f, 0.26f);
+            Part(PrimitiveType.Sphere, head, "Head", Vector3.zero, new Vector3(0.2f, 0.19f, 0.21f), black);
+            Part(PrimitiveType.Cube, head, "Muzzle", new Vector3(0f, -0.035f, 0.13f), new Vector3(0.085f, 0.07f, 0.13f), white);
+            GameObject blaze = Part(PrimitiveType.Cube, head, "Blaze", new Vector3(0f, 0.035f, 0.085f), new Vector3(0.035f, 0.11f, 0.03f), white);
+            blaze.transform.localRotation = Quaternion.Euler(-35f, 0f, 0f);
+            Part(PrimitiveType.Sphere, head, "Nose", new Vector3(0f, -0.01f, 0.2f), Vector3.one * 0.038f, nose);
+            Part(PrimitiveType.Sphere, head, "EyeL", new Vector3(-0.048f, 0.03f, 0.088f), Vector3.one * 0.03f, amber);
+            Part(PrimitiveType.Sphere, head, "EyeR", new Vector3(0.048f, 0.03f, 0.088f), Vector3.one * 0.03f, amber);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                string n = side < 0 ? "L" : "R";
+                GameObject ear = Part(PrimitiveType.Cube, head, "Ear" + n, new Vector3(0.068f * side, 0.1f, -0.01f), new Vector3(0.05f, 0.075f, 0.022f), black);
+                ear.transform.localRotation = Quaternion.Euler(0f, 0f, -15f * side);
+                GameObject tip = Part(PrimitiveType.Cube, head, "EarTip" + n, new Vector3(0.08f * side, 0.14f, 0.012f), new Vector3(0.042f, 0.035f, 0.02f), black);
+                tip.transform.localRotation = Quaternion.Euler(55f, 0f, -15f * side);   // the folded-over tip
+            }
 
+            // A long, bushy tail that hangs down from the pivot and lifts when happy (see Tick).
             tail = new GameObject("TailPivot").transform;
             tail.SetParent(root, false);
-            tail.localPosition = new Vector3(0f, 0.38f, -0.25f);
-            Part(PrimitiveType.Cylinder, tail, "Tail", new Vector3(0f, 0.08f, 0f), new Vector3(0.04f, 0.09f, 0.04f), darkFur);
+            tail.localPosition = new Vector3(0f, 0.38f, -0.27f);
+            Part(PrimitiveType.Cylinder, tail, "Tail", new Vector3(0f, -0.12f, 0f), new Vector3(0.05f, 0.12f, 0.05f), black);
+            Part(PrimitiveType.Sphere, tail, "TailTip", new Vector3(0f, -0.25f, 0f), new Vector3(0.06f, 0.08f, 0.06f), white);
 
-            var labelGo = new GameObject("MochiLabel");
+            var labelGo = new GameObject("LatteLabel");
             labelGo.transform.SetParent(parent, false);
             label = labelGo.AddComponent<TextMesh>();
             Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -194,11 +212,12 @@ namespace MahjongNight.Game
 
             // Tail: the happier, the faster.
             float speed, amp, lift;
-            if (hopping || eating) { speed = 16f; amp = 40f; lift = -40f; }
-            else if (mood == DogMood.Content) { speed = 10f; amp = 30f; lift = -35f; }
-            else if (mood == DogMood.Peckish) { speed = 5f; amp = 20f; lift = -20f; }
-            else if (mood == DogMood.Hungry) { speed = 3f; amp = 10f; lift = 0f; }
-            else { speed = 0f; amp = 0f; lift = 40f; }                     // tail down
+            // (lift: 0 = hanging straight down, 90 = straight out behind, more = raised)
+            if (hopping || eating) { speed = 16f; amp = 40f; lift = 105f; }
+            else if (mood == DogMood.Content) { speed = 10f; amp = 30f; lift = 85f; }
+            else if (mood == DogMood.Peckish) { speed = 5f; amp = 20f; lift = 60f; }
+            else if (mood == DogMood.Hungry) { speed = 3f; amp = 10f; lift = 35f; }
+            else { speed = 0f; amp = 0f; lift = 8f; }                      // tucked down
             tail.localRotation = Quaternion.Euler(lift, Mathf.Sin(clock * speed) * amp, 0f);
 
             // The bowl has food in it while they eat (soup-coloured if it's a treat).
@@ -206,13 +225,13 @@ namespace MahjongNight.Game
             if (eating)
                 foodMat.color = dog.TreatLeft > 0 ? new Color(0.95f, 0.8f, 0.45f) : new Color(0.45f, 0.28f, 0.15f);
 
-            // "MOCHI / hungry" above their head, facing you.
+            // "LATTE / hungry" above their head, facing you.
             Vector3 lp = root.position + Vector3.up * 0.75f;
             label.transform.position = lp;
             Vector3 away = lp - cameraPosition;
             if (away.sqrMagnitude > 0.0001f)
                 label.transform.rotation = Quaternion.LookRotation(away);
-            label.text = "MOCHI\n" + (eating ? "nom nom nom" : Dog.Describe(mood));
+            label.text = "LATTE\n" + (eating ? "nom nom nom" : Dog.Describe(mood));
             label.color = mood == DogMood.Content ? new Color(0.6f, 1f, 0.6f)
                 : mood == DogMood.Peckish ? new Color(1f, 0.95f, 0.6f)
                 : mood == DogMood.Hungry ? new Color(1f, 0.7f, 0.3f)

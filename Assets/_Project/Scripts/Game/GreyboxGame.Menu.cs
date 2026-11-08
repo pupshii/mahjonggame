@@ -138,7 +138,7 @@ namespace MahjongNight.Game
                 GUI.Label(new Rect(x, y, w, Unit * 4.5f), "MAHJONG NIGHT  麻雀夜", big);
                 y += Unit * 5f;
                 GUI.Label(new Rect(x, y, w, LineHeight * 2.2f),
-                    "You run the club. Play your hand at every table, cook for your customers, don't forget to eat, drink and pee — and keep Mochi fed at home.", mid);
+                    "You run the club. Play your hand at every table, cook for your customers, don't forget to eat, drink and pee — and keep Latte fed at home.", mid);
                 y += LineHeight * 2.8f;
                 GUI.Label(new Rect(x, y, w, LineHeight), "<b>Choose a difficulty</b>", centerStyle);
                 y += LineHeight * 1.4f;
