@@ -59,30 +59,15 @@ namespace MahjongNight.Game
 
         private RuleSet rules;
         private MatchRules matchRules;
-        private ScoreMatch match;
-        private HandState Hand => match.Hand;
         private SeededRandom seedSource;
 
-        private readonly SimpleBot[] bots = new SimpleBot[HandState.SeatCount];
-        private IBot humanAutoBot;
-        private readonly BotBrain[] brains = new BotBrain[HandState.SeatCount];
-        private readonly PlayerAvatar[] avatars = new PlayerAvatar[HandState.SeatCount];
-        private readonly CheatMotion[] cheats = new CheatMotion[HandState.SeatCount];
-        private readonly float[] lookingDownFor = new float[HandState.SeatCount];
-
-        private TableView table;
+        // Per-table state (match, bots, avatars, cheats, tiles, timers…) lives in TableContext —
+        // see GreyboxGame.Tables.cs; the code here works on the current table, ctx.
         private Camera cam;
         private HeadLook headLook;
-
-        private float nextBotTime;
-        private float humanWaitStart;
         private float callOutCooldownUntil;
 
         private readonly List<string> log = new List<string>();
-        private int loggedHandEvents;
-        private int loggedMatchEvents;
-        private List<string> resultLines = new List<string>();
-        private readonly List<string> paymentLines = new List<string>();
         private string popupTitle, popupText;
         private float popupUntil;
 
@@ -113,15 +98,10 @@ namespace MahjongNight.Game
             seedSource = new SeededRandom(seed != 0 ? (ulong)seed : (ulong)System.DateTime.Now.Ticks);
 
             SetUpCameraAndLight();
-            table = new TableView(transform, new TileFactory());
-            for (int s = 0; s < HandState.SeatCount; s++)
-            {
-                int relative = (s - HumanSeat + HandState.SeatCount) % HandState.SeatCount;
-                avatars[s] = new PlayerAvatar(transform, s, relative, SeatColors[s], firstPerson: s == HumanSeat);
-            }
-            headLook = new HeadLook(cam, avatars[HumanSeat].EyePosition);
+            BuildTables();
+            headLook = new HeadLook(cam, avatars[HumanSeat].EyePosition, ctx.Origin);
             SetUpLife();
-            NewMatch();
+            NewMatchAll();
         }
 
         private void SetUpCameraAndLight()
@@ -158,12 +138,12 @@ namespace MahjongNight.Game
             for (int s = 0; s < HandState.SeatCount; s++)
                 brains[s] = s == HumanSeat ? null : new BotBrain(s, matchSeed + (ulong)s * 31UL);
             AddLog($"New match: {matchRules.HandsPerMatch} hands (seed {matchSeed}).");
-            ResetLife();
             StartHand();
         }
 
         private void StartHand()
         {
+            ctx.AutoNextHandAt = -1f;
             match.StartHand();
             ulong botSeed = seedSource.NextUInt64();
             for (int s = 0; s < bots.Length; s++)
@@ -181,7 +161,8 @@ namespace MahjongNight.Game
             resultLines = new List<string>();
             paymentLines.Clear();
             FlushMatchEvents();
-            AddLog($"Your pocket: {string.Join(" ", match.Players[HumanSeat].Pocket)}");
+            if (ctx == Seated)
+                AddLog($"Your pocket: {string.Join(" ", match.Players[HumanSeat].Pocket)}");
             OnHandChanged();
         }
 
@@ -191,37 +172,23 @@ namespace MahjongNight.Game
 
         private void Update()
         {
-            if (match == null)
+            if (tables.Count == 0 || Seated.Match == null)
                 return;
             float now = Time.time;
             float dt = Time.deltaTime;
 
-            UpdateLife(now, dt);
+            ctx = Seated;
+            UpdateLife(now, dt);                 // you: needs, walking, your phone
+            ctx = Seated;
             if (!standing)
                 UpdateHumanHead(dt);
-            for (int s = 0; s < HandState.SeatCount; s++)
-            {
-                float pitch = s == HumanSeat ? headLook.Pitch : avatars[s].PitchDown;
-                bool innocent = OnPhone(s) || (s == HumanSeat && standing); // everyone can see a phone
-                lookingDownFor[s] = !innocent && pitch >= HeadLook.LookingDownPitch ? lookingDownFor[s] + dt : 0f;
-            }
 
-            if (HandLive)
+            foreach (TableContext t in tables)   // every table plays on, with or without you
             {
-                UpdateBotGaze(now);
-                UpdateCheats(now);
-                if (HandLive) UpdateBotCheating(now);
-                if (HandLive) UpdateSpotting(now, dt);
-                if (HandLive) UpdateTurns(now);
+                ctx = t;
+                UpdateTable(now, dt);
             }
-
-            for (int s = 0; s < HandState.SeatCount; s++)
-            {
-                CheatMotion c = cheats[s];
-                bool active = c != null && c.InProgress;
-                avatars[s].SetRightHand(active ? c.Pose : HandPose.Rest, active ? c.Progress(now) : 0f, now);
-                avatars[s].Tick(dt, followGaze: s != HumanSeat);
-            }
+            ctx = Seated;
         }
 
         private void UpdateHumanHead(float dt)
@@ -238,7 +205,6 @@ namespace MahjongNight.Game
             else if (hasMouse && !overUi && !PickerOpen)
                 headLook.AimFromCursor(mouseGui, Screen.width, Screen.height);
             headLook.Tick(dt);
-            avatars[HumanSeat].SetHeadRotation(headLook.HeadRotation);
         }
 
         private bool PickerOpen => HandLive && humanAlive && Hand.Phase == HandPhase.AwaitingDraw && Hand.CurrentSeat == HumanSeat;
@@ -247,7 +213,8 @@ namespace MahjongNight.Game
 
         private void UpdateTurns(float now)
         {
-            float limit = HumanAway ? AwayAutoPlaySeconds : humanTimeLimit;
+            // Same countdown at every table, sitting there or not — that's the scramble.
+            float limit = HumanTimeLimitHere();
             if (HumanActions().Count > 0 && limit > 0f && now - humanWaitStart > limit)
             {
                 AutoPlayHuman();
@@ -365,6 +332,7 @@ namespace MahjongNight.Game
             match.ResolveHand();
             FlushMatchEvents();
             BotsShop();
+            ctx.AutoNextHandAt = Time.time + autoNextHandSeconds * (AtThisTable ? 2.5f : 1f); // time to shop
         }
 
         private void RebuildTable()
@@ -608,7 +576,9 @@ namespace MahjongNight.Game
             FlushMatchEvents();
             FlushHandEvents();
             BotsShop();
-            ShowPopup("出千!  Caught cheating!", resultLines[0].Replace(" 出千!", ""));
+            ctx.AutoNextHandAt = Time.time + autoNextHandSeconds * (AtThisTable ? 2.5f : 1f);
+            if (cheater == HumanSeat || caller == HumanSeat || AtThisTable)
+                ShowPopup("出千!  Caught cheating!", resultLines[0].Replace(" 出千!", ""));
             RebuildTable();
         }
 
@@ -689,6 +659,8 @@ namespace MahjongNight.Game
 
         private void AddLog(string line)
         {
+            if (tables.Count > 1 && ctx != null && ctx != Seated)
+                line = $"[T{ctx.Index + 1}] {line}";
             log.Add(line);
             if (log.Count > 300)
                 log.RemoveAt(0);
@@ -765,6 +737,9 @@ namespace MahjongNight.Game
 
         private void OnGUI()
         {
+            if (tables.Count == 0)
+                return;
+            ctx = Seated; // the UI is for the table you sit at
             if (match == null || Hand == null)
                 return;
             EnsureStyles();
@@ -850,6 +825,7 @@ namespace MahjongNight.Game
             {
                 DrawBetweenHands();
             }
+            DrawTablesOverview();
             DrawCallPanel();
             DrawPhoneOverlay();
             DrawPopup();
@@ -931,7 +907,7 @@ namespace MahjongNight.Game
         /// <summary>Screen y (GUI coordinates) of the top of the human's hand.</summary>
         private float HandTopY()
         {
-            Vector3 p = cam.WorldToScreenPoint(TableView.HumanHandTop);
+            Vector3 p = cam.WorldToScreenPoint(table.HumanHandTop);
             return p.z > 0f ? Screen.height - p.y : Screen.height * 0.8f;
         }
 
@@ -943,6 +919,7 @@ namespace MahjongNight.Game
             MatchPlayer me = match.Players[HumanSeat];
             var lines = new List<string>
             {
+                (tables.Count > 1 ? $"Table {ctx.Index + 1}/{tables.Count} · " : "") +
                 $"Hand {match.HandNumber}/{matchRules.HandsPerMatch} · {(classicRules ? "Classic" : "Party")} · {match.PrevailingWind} round · Wall {Hand.Wall.DrawableCount}",
                 HandLive ? $"Turn: {SeatName(Hand.CurrentSeat)}" : "Hand over",
                 ScoresLine(),
@@ -1201,7 +1178,20 @@ namespace MahjongNight.Game
             DrawBottomPanel(null, lines, labels, actions, centered: true);
         }
 
-        private int SecondsLeft() => Mathf.Max(0, Mathf.CeilToInt(humanTimeLimit - (Time.time - humanWaitStart)));
+        private int SecondsLeft() => Mathf.Max(0, Mathf.CeilToInt(HumanTimeLimitHere() - (Time.time - humanWaitStart)));
+
+        /// <summary>
+        /// How long the current table waits for you: the full turn timer for your turn (and for
+        /// anything at the table you're sitting at), but only a few seconds for a claim chance at
+        /// a table you're away from — otherwise every possible pung would stall that table.
+        /// </summary>
+        private float HumanTimeLimitHere()
+        {
+            bool claimWindow = Hand != null && (Hand.Phase == HandPhase.AwaitingClaims || Hand.Phase == HandPhase.AwaitingRobKong);
+            return claimWindow && !AtThisTable ? Mathf.Min(AwayClaimSeconds, humanTimeLimit) : humanTimeLimit;
+        }
+
+        private const float AwayClaimSeconds = 4f;
 
         /// <summary>Newbie hint: which tiles would complete the hand (only between turns).</summary>
         private string ReadyHint()
@@ -1369,7 +1359,7 @@ namespace MahjongNight.Game
                     ? (match.Winners.Count > 1 ? "MATCH OVER — you share first place!" : "MATCH OVER — YOU WIN!")
                     : "MATCH OVER — winner: " + string.Join(", ", match.Winners.Select(SeatName)));
                 labels.Add("New match");
-                actions.Add(NewMatch);
+                actions.Add(NewMatchAll); // restarts every table
             }
             else
             {
@@ -1393,7 +1383,7 @@ namespace MahjongNight.Game
                         });
                     }
                 }
-                labels.Add("<b>Next hand</b>");
+                labels.Add($"<b>Next hand</b> ({Mathf.Max(0, Mathf.CeilToInt(ctx.AutoNextHandAt - Time.time))}s)");
                 actions.Add(StartHand);
             }
             DrawBottomPanel(title, lines, labels, actions, centered: false);

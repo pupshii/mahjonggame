@@ -34,21 +34,35 @@ namespace MahjongNight.Game
         private const float ZoomSpeed = 10f;
 
         // Above the table, slightly toward your side so your own seat is at the bottom of the view.
-        private static readonly Vector3 TableViewPosition = new Vector3(0f, 1.95f, -0.42f);
-        private static readonly Vector3 TableViewTarget = new Vector3(0f, 0f, -0.02f);
+        private static readonly Vector3 TableViewOffset = new Vector3(0f, 1.95f, -0.42f);
+        private static readonly Vector3 TableViewAimOffset = new Vector3(0f, 0f, -0.02f);
 
         private readonly Camera camera;
-        private readonly Vector3 eye;
+        private Vector3 eye;
+        private Vector3 tableOrigin;
+        private Vector3 TableViewPosition => tableOrigin + TableViewOffset;
+        private Vector3 TableViewTarget => tableOrigin + TableViewAimOffset;
         private float yaw, pitch = BasePitch;
         private float targetYaw, targetPitch = BasePitch;
         private float tableBlend, tableTarget;
         private float zoom = 1f, zoomTarget = 1f;
-        private Vector3 tableAim = TableViewTarget, tableAimTarget = TableViewTarget;
+        private Vector3 tableAim, tableAimTarget;
 
-        public HeadLook(Camera camera, Vector3 eyePosition)
+        public HeadLook(Camera camera, Vector3 eyePosition, Vector3 tableOrigin)
         {
             this.camera = camera;
+            SetSeat(eyePosition, tableOrigin);
+        }
+
+        /// <summary>Sit at a (different) table: your eyes and the table view move there.</summary>
+        public void SetSeat(Vector3 eyePosition, Vector3 tableCentre)
+        {
             eye = eyePosition;
+            tableOrigin = tableCentre;
+            tableAim = tableAimTarget = TableViewTarget;
+            yaw = targetYaw = 0f;
+            pitch = targetPitch = BasePitch;
+            tableBlend = tableTarget = 0f;
             Apply();
         }
 

@@ -25,6 +25,11 @@ git clone https://github.com/pupshii/mahjonggame.git
 ## Playing the greybox
 1. Menu bar → **Mahjong Night → Create Greybox Scene** (first time only; commit the scene).
    Later: **Mahjong Night → Open Greybox Scene**. Press **Play**.
+   **Five tables:** you hold a seat at 5 tables at once, each with its own 3 bots and its own
+   match. A sign above every table counts down whenever it's waiting on you ("YOUR TURN 14s"); when
+   it hits 0 your move there is played for you. Claim chances at tables you're away from only wait
+   4 s. Press **F** to get up, walk to another table, stand behind your chair and press **F** (or
+   **E** on the chair) to sit down and play there. The right-hand panel lists every table's status.
 2. **Look around with the cursor:** the middle of the screen is calm; push to the left/right
    edges to watch the players beside you, the top edge to look across, the **bottom edge to look
    down** into your lap.
@@ -45,8 +50,8 @@ git clone https://github.com/pupshii/mahjonggame.git
    text too, and may call *you* when you're watching them too closely.
 7. **Survival:** Food, Water and Pee bars drain over time (walking/sprinting drains food and
    water faster; drinking fills your bladder). Press **F** to stand up, **WASD** to walk,
-   **Shift** to sprint, **E** to use the toilet / water jar / food counter, **F** at your chair
-   to sit back down. While you're up, your turns play themselves after 3 s. If any bar hits 0
+   **Shift** to sprint, **E** to use the toilet / water jar / food counter, **F** behind any of
+   your chairs to sit down at that table. Every table's countdown keeps running while you're up. If any bar hits 0
    you die: a house bot takes your seat and you can't win the match. (Bots don't have bars yet.)
 8. **Between hands:** winners collect faan (discarder pays, or everyone on a self-draw); spend
    faan on upgrades (Sleight of Hand, Deep Pockets, Poker Face, Eagle Eye). Highest faan after

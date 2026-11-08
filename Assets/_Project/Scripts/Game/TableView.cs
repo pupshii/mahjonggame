@@ -31,22 +31,21 @@ namespace MahjongNight.Game
         private readonly Transform tilesRoot;
         private readonly List<TileView> humanHand = new List<TileView>();
 
-        public TableView(Transform parent, TileFactory factory)
+        private readonly Vector3 origin;
+
+        /// <param name="origin">Centre of this table in the world (several tables can share a room).</param>
+        public TableView(Transform parent, TileFactory factory, Vector3 origin)
         {
             this.factory = factory;
+            this.origin = origin;
 
             GameObject top = GameObject.CreatePrimitive(PrimitiveType.Cube);
             top.name = "Table";
             top.transform.SetParent(parent, false);
-            top.transform.localPosition = new Vector3(0f, -0.025f, 0f);
+            top.transform.localPosition = origin + new Vector3(0f, -0.025f, 0f);
             top.transform.localScale = new Vector3(1.9f, 0.05f, 1.9f);
             top.GetComponent<Renderer>().sharedMaterial = TileFactory.CreateMaterial(new Color(0.16f, 0.36f, 0.24f));
 
-            GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
-            floor.name = "Floor";
-            floor.transform.SetParent(parent, false);
-            floor.transform.localPosition = new Vector3(0f, -0.75f, 0f);
-            floor.GetComponent<Renderer>().sharedMaterial = TileFactory.CreateMaterial(new Color(0.18f, 0.14f, 0.12f));
 
             tilesRoot = new GameObject("Tiles").transform;
             tilesRoot.SetParent(parent, false);
@@ -57,16 +56,8 @@ namespace MahjongNight.Game
         public IReadOnlyList<TileView> HumanHand => humanHand;
 
         /// <summary>World point at the top of the human's hand, for placing the action bar above it.</summary>
-        public static Vector3 HumanHandTop => new Vector3(0f, TileFactory.Height + 0.01f, HandZ + 0.02f);
+        public Vector3 HumanHandTop => origin + new Vector3(0f, TileFactory.Height + 0.01f, HandZ + 0.02f);
 
-        /// <summary>World point above a seat's hand, for placing name tags.</summary>
-        public static Vector3 SeatAnchor(int seat, int humanSeat)
-        {
-            int relative = (seat - humanSeat + HandState.SeatCount) % HandState.SeatCount;
-            return Quaternion.Euler(0f, -90f * relative, 0f) * new Vector3(0f, 0.13f, HandZ);
-        }
-
-        /// <param name="hiddenTiles">Per seat, one tile currently "in transit" to a pocket (not drawn in the hand row).</param>
         public void Rebuild(HandState hand, int humanSeat, bool revealBots, IReadOnlyDictionary<int, Tile> hiddenTiles = null)
         {
             for (int i = tilesRoot.childCount - 1; i >= 0; i--)
@@ -208,7 +199,7 @@ namespace MahjongNight.Game
             TileLook look = TileLook.Normal, float scale = 1f)
         {
             TileView view = factory.Create(tile, showFace, tilesRoot, look, scale);
-            view.transform.position = frame * localPos;
+            view.transform.position = origin + frame * localPos;
             view.transform.rotation = frame * localRot;
             view.RestPosition = view.transform.position;
             return view;

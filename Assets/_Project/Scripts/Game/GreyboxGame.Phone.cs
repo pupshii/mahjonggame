@@ -27,9 +27,10 @@ namespace MahjongNight.Game
             public bool Replied;
         }
 
-        private readonly PhoneState[] phones = new PhoneState[HandState.SeatCount];
-        private readonly float[] nextDogText = new float[HandState.SeatCount];
-        private readonly float[] callCooldownUntil = new float[HandState.SeatCount];
+        // Your phone is global (you only have one); bots' phones belong to their table (ctx.Phones).
+        private PhoneState humanPhone;
+        private float humanNextDogText;
+        private float humanCallReadyAt;
         private bool phonePanelOpen;
         private SeededRandom phoneRng = new SeededRandom(7);
 
@@ -53,50 +54,55 @@ namespace MahjongNight.Game
             "\"Wrong number. Or is it?\"",
         };
 
-        private bool OnPhone(int seat) => phones[seat] != null;
+        private PhoneState GetPhone(int seat) => seat == HumanSeat ? humanPhone : ctx.Phones[seat];
+
+        private bool OnPhone(int seat) => GetPhone(seat) != null;
+
+        /// <summary>The avatar holding this seat's phone (yours sits at whichever table you're at).</summary>
+        private PlayerAvatar PhoneHolder(int seat) => seat == HumanSeat ? Seated.Avatars[HumanSeat] : avatars[seat];
 
         private void ResetPhones()
         {
             phoneRng = new SeededRandom((ulong)System.DateTime.Now.Ticks);
             float now = Time.time;
-            for (int s = 0; s < HandState.SeatCount; s++)
+            TableContext keep = ctx;
+            foreach (TableContext t in tables)
             {
-                phones[s] = null;
-                avatars[s].SetPhone(false);
-                nextDogText[s] = now + Range(40f, 90f);
-                callCooldownUntil[s] = now + 15f;
+                ctx = t;
+                for (int s = 0; s < HandState.SeatCount; s++)
+                {
+                    t.Phones[s] = null;
+                    t.Avatars[s].SetPhone(false);
+                    t.NextDogText[s] = now + Range(40f, 90f);
+                    t.CallCooldownUntil[s] = now + 15f;
+                }
             }
+            ctx = keep;
+            humanPhone = null;
+            humanNextDogText = now + Range(40f, 90f);
+            humanCallReadyAt = now + 15f;
             phonePanelOpen = false;
         }
 
         private float Range(float min, float max) => min + (float)phoneRng.NextDouble() * (max - min);
 
-        private void UpdatePhones(float now)
+        /// <summary>Your phone: dog texts, replying (1-3), and calling (P / 1-3).</summary>
+        private void UpdateHumanPhone(float now)
         {
-            bool playing = match.Phase != MatchPhase.MatchOver;
-
-            for (int s = 0; s < HandState.SeatCount; s++)
+            if (humanPhone != null)
             {
-                PhoneState p = phones[s];
-                if (p != null)
-                {
-                    bool human = HumanControls(s);
-                    bool done = human && p.IsDogText ? p.Replied && now >= p.MinUntil : now >= p.Until;
-                    if (done)
-                        PutPhoneAway(s);
-                    continue;
-                }
-
-                bool canText = playing && (s != HumanSeat || humanAlive);
-                if (canText && now >= nextDogText[s])
-                {
-                    nextDogText[s] = now + (s == HumanSeat ? Range(55f, 110f) : Range(45f, 100f));
-                    StartDogText(s, now);
-                }
+                bool done = humanPhone.IsDogText ? humanPhone.Replied && now >= humanPhone.MinUntil : now >= humanPhone.Until;
+                if (done || !humanAlive)
+                    PutPhoneAway(HumanSeat);
+            }
+            else if (humanAlive && now >= humanNextDogText)
+            {
+                humanNextDogText = now + Range(55f, 110f);
+                StartDogText(HumanSeat, now);
             }
 
             // Reply to the dog with 1-3 (no mouse needed).
-            PhoneState mine = phones[HumanSeat];
+            PhoneState mine = humanPhone;
             if (mine != null && mine.IsDogText && !mine.Replied && now >= mine.MinUntil && humanAlive)
             {
                 for (int i = 0; i < DogReplies.Length; i++)
@@ -110,8 +116,8 @@ namespace MahjongNight.Game
                 return; // number keys answer the dog instead of calling
             }
 
-            // Calling: P opens the phone, 1-3 call a player directly.
-            if (humanAlive && playing)
+            // Calling: P opens the phone, 1-3 call a player at the table you're sitting at.
+            if (humanAlive)
             {
                 if (Input.GetKeyDown(KeyCode.P))
                     phonePanelOpen = !phonePanelOpen;
@@ -121,16 +127,47 @@ namespace MahjongNight.Game
             }
         }
 
+        /// <summary>Bots' phones at the current table: their dog texts, and calls ending.</summary>
+        private void UpdateBotPhones(float now)
+        {
+            bool playing = match.Phase != MatchPhase.MatchOver;
+            for (int s = 0; s < HandState.SeatCount; s++)
+            {
+                if (s == HumanSeat)
+                    continue;
+                PhoneState p = ctx.Phones[s];
+                if (p != null)
+                {
+                    if (now >= p.Until)
+                        PutPhoneAway(s);
+                    continue;
+                }
+                if (playing && now >= ctx.NextDogText[s])
+                {
+                    ctx.NextDogText[s] = now + Range(45f, 100f);
+                    StartDogText(s, now);
+                }
+            }
+        }
+
+        private void SetPhone(int seat, PhoneState state)
+        {
+            if (seat == HumanSeat)
+                humanPhone = state;
+            else
+                ctx.Phones[seat] = state;
+        }
+
         private void StartDogText(int seat, float now)
         {
-            phones[seat] = new PhoneState
+            SetPhone(seat, new PhoneState
             {
                 From = "Dog (home)",
                 Message = DogTexts[phoneRng.NextInt(DogTexts.Length)],
                 IsDogText = true,
                 MinUntil = now + DogTextMinRead,
                 Until = now + Range(3f, 5f),
-            };
+            });
             OnPhoneStarted(seat);
             if (seat != HumanSeat)
                 AddLog($"{SeatName(seat)} checks their phone.");
@@ -140,22 +177,26 @@ namespace MahjongNight.Game
         {
             if (OnPhone(target))
                 return;
-            phones[target] = new PhoneState
+            string from = SeatName(caller) + (tables.Count > 1 && caller != HumanSeat ? $" (table {ctx.Index + 1})" : "");
+            SetPhone(target, new PhoneState
             {
-                From = SeatName(caller),
+                From = from,
                 Message = CallLines[phoneRng.NextInt(CallLines.Length)],
                 IsDogText = false,
                 MinUntil = now,
                 Until = now + Range(4f, 5.5f),
-            };
-            callCooldownUntil[caller] = now + (caller == HumanSeat ? HumanCallCooldown : BotCallCooldown);
+            });
+            if (caller == HumanSeat)
+                humanCallReadyAt = now + HumanCallCooldown;
+            else
+                ctx.CallCooldownUntil[caller] = now + BotCallCooldown;
             OnPhoneStarted(target);
-            AddLog(target == HumanSeat ? $"{SeatName(caller)} is calling you!" : $"{SeatName(caller)} calls {SeatName(target)}.");
+            AddLog(target == HumanSeat ? $"{from} is calling you!" : $"{SeatName(caller)} calls {SeatName(target)}.");
         }
 
         private void OnPhoneStarted(int seat)
         {
-            avatars[seat].SetPhone(true);
+            PhoneHolder(seat).SetPhone(true);
             if (seat != HumanSeat)
             {
                 avatars[seat].LookAt(avatars[seat].PhonePoint);
@@ -166,9 +207,10 @@ namespace MahjongNight.Game
 
         private void PutPhoneAway(int seat)
         {
-            phones[seat] = null;
-            avatars[seat].SetPhone(false);
-            brains[seat]?.ReleaseGaze(Time.time);
+            PhoneHolder(seat).SetPhone(false);
+            SetPhone(seat, null);
+            if (seat != HumanSeat)
+                brains[seat]?.ReleaseGaze(Time.time);
         }
 
         private void TryHumanCall(int target)
@@ -176,9 +218,9 @@ namespace MahjongNight.Game
             float now = Time.time;
             if (!humanAlive || target == HumanSeat || OnPhone(HumanSeat))
                 return;
-            if (now < callCooldownUntil[HumanSeat])
+            if (now < humanCallReadyAt)
             {
-                ShowPopup("Phone", $"You can call again in {Mathf.CeilToInt(callCooldownUntil[HumanSeat] - now)}s.");
+                ShowPopup("Phone", $"You can call again in {Mathf.CeilToInt(humanCallReadyAt - now)}s.");
                 return;
             }
             if (OnPhone(target))
@@ -194,7 +236,7 @@ namespace MahjongNight.Game
         private bool TryBotDistractHuman(int bot)
         {
             float now = Time.time;
-            if (!humanAlive || standing || OnPhone(HumanSeat) || now < callCooldownUntil[bot])
+            if (!humanAlive || !AtThisTable || OnPhone(HumanSeat) || now < ctx.CallCooldownUntil[bot])
                 return false;
             // Only worth it if you're the one watching (another bot staring is a different problem).
             for (int w = 0; w < HandState.SeatCount; w++)
@@ -202,7 +244,7 @@ namespace MahjongNight.Game
                     return false;
             if (brains[bot].Roll() > 0.5)
             {
-                callCooldownUntil[bot] = now + 10f; // thought about it, not this time
+                ctx.CallCooldownUntil[bot] = now + 10f; // thought about it, not this time
                 return false;
             }
             StartCall(bot, HumanSeat, now);
@@ -214,7 +256,7 @@ namespace MahjongNight.Game
         /// <summary>Your phone, when it's out: the dog's text (reply to put it away) or a call.</summary>
         private void DrawPhoneOverlay()
         {
-            PhoneState p = phones[HumanSeat];
+            PhoneState p = humanPhone;
             if (p == null)
                 return;
             float now = Time.time;
@@ -269,10 +311,10 @@ namespace MahjongNight.Game
             float x = r.x + Pad, iw = r.width - Pad * 2, y = r.y + Pad;
             GUI.Label(new Rect(x, y, iw, LineHeight), "Call someone (distracts them ~5s)", titleStyle);
             y += LineHeight * 1.5f;
-            bool ready = now >= callCooldownUntil[HumanSeat];
+            bool ready = now >= humanCallReadyAt;
             for (int s = 1; s < HandState.SeatCount; s++)
             {
-                string label = ready ? $"{s}: Call {SeatName(s)}" : $"Cooldown {Mathf.CeilToInt(callCooldownUntil[HumanSeat] - now)}s";
+                string label = ready ? $"{s}: Call {SeatName(s)}" : $"Cooldown {Mathf.CeilToInt(humanCallReadyAt - now)}s";
                 bool wasEnabled = GUI.enabled;
                 GUI.enabled = ready && !OnPhone(s);
                 if (GUI.Button(new Rect(x, y, iw, Unit * 2.2f), label, buttonStyle))
@@ -289,7 +331,7 @@ namespace MahjongNight.Game
         private string PhoneStatusLine()
         {
             float now = Time.time;
-            string call = now >= callCooldownUntil[HumanSeat] ? "<color=#8f8>ready</color>" : $"{Mathf.CeilToInt(callCooldownUntil[HumanSeat] - now)}s";
+            string call = now >= humanCallReadyAt ? "<color=#8f8>ready</color>" : $"{Mathf.CeilToInt(humanCallReadyAt - now)}s";
             var busy = Enumerable.Range(0, HandState.SeatCount).Where(s => s != HumanSeat && OnPhone(s)).Select(ShortName).ToList();
             return $"Phone (P / 1-3 to call): {call}" + (busy.Count > 0 ? $"   ·   On their phone: {string.Join(", ", busy)}" : "");
         }

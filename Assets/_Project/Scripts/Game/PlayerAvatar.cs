@@ -44,8 +44,12 @@ namespace MahjongNight.Game
         private readonly GameObject phone;
         private Vector3 gazeTarget;
 
-        public PlayerAvatar(Transform parent, int seat, int relative, Color color, bool firstPerson)
+        private readonly Vector3 origin;
+
+        /// <param name="origin">Centre of the table this player sits at.</param>
+        public PlayerAvatar(Transform parent, int seat, int relative, Color color, bool firstPerson, Vector3 origin)
         {
+            this.origin = origin;
             Seat = seat;
             frame = Quaternion.Euler(0f, -90f * relative, 0f);
             root = new GameObject($"Avatar{seat}").transform;
@@ -208,7 +212,7 @@ namespace MahjongNight.Game
             return p;
         }
 
-        private Vector3 World(Vector3 seatLocal) => frame * seatLocal;
+        private Vector3 World(Vector3 seatLocal) => origin + frame * seatLocal;
 
         private GameObject Part(PrimitiveType type, Transform parent, string name, Material material, bool removeCollider)
         {

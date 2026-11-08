@@ -1,3 +1,4 @@
+using System.Linq;
 using MahjongNight.Core;
 using UnityEngine;
 
@@ -6,11 +7,10 @@ namespace MahjongNight.Game
     /// <summary>
     /// Survival and walking: hunger / thirst / bladder bars, getting up from the table (F),
     /// walking (WASD, Shift to sprint), using the toilet, water and food (E), and dying when a
-    /// bar runs out. While you're away from the table your turns play themselves after a moment.
+    /// bar runs out. Every table keeps its own countdown while you're away from it.
     /// </summary>
     public sealed partial class GreyboxGame
     {
-        private const float AwayAutoPlaySeconds = 3f;
         private const float InteractRange = 2.2f;
 
         private RoomView room;
@@ -24,17 +24,14 @@ namespace MahjongNight.Game
 
         /// <summary>Is there UI on screen that needs a free mouse cursor?</summary>
         private bool CursorNeeded =>
-            OnPhone(HumanSeat) || phonePanelOpen || !HandLive || (popupText != null && Time.time <= popupUntil);
+            OnPhone(HumanSeat) || phonePanelOpen || (popupText != null && Time.time <= popupUntil);
 
         /// <summary>Does the human (rather than a bot) play this seat right now?</summary>
         private bool HumanControls(int seat) => seat == HumanSeat && humanAlive;
 
-        /// <summary>Away from the table: up and walking, or busy at the toilet / water / food.</summary>
-        private bool HumanAway => standing;
-
         private void SetUpLife()
         {
-            room = new RoomView(transform, HumanSeat);
+            room = new RoomView(transform, HumanSeat, tables.Select(t => t.Origin).ToList());
             walker = new Walker(room);
         }
 
@@ -43,16 +40,15 @@ namespace MahjongNight.Game
             needs = new SurvivalNeeds();
             humanAlive = true;
             if (standing)
-                SitDown();
+                SitDown(seatedTable);
             using_ = null;
-            avatars[HumanSeat].SetVisible(true);
             ResetPhones();
         }
 
         /// <summary>Runs before the table logic each frame: needs, walking, interactions, phones.</summary>
         private void UpdateLife(float now, float dt)
         {
-            UpdatePhones(now);
+            UpdateHumanPhone(now);
 
             // Standing captures the mouse for looking around — but release it whenever there's
             // something on screen to click (phone, call panel, popup, results/shop).
@@ -80,9 +76,10 @@ namespace MahjongNight.Game
                 walker.ApplyTo(cam);
                 UpdateInteractables(now);
                 if (Input.GetKeyDown(KeyCode.E) && lookingAtInteractable != null && !using_.HasValue && !OnPhone(HumanSeat))
-                    Use(lookingAtInteractable.Kind, now);
-                if (Input.GetKeyDown(KeyCode.F) && NearChair() && !using_.HasValue)
-                    SitDown();
+                    Use(lookingAtInteractable, now);
+                int chair = NearestChair();
+                if (Input.GetKeyDown(KeyCode.F) && chair >= 0 && !using_.HasValue)
+                    SitDown(chair);
             }
             else if (humanAlive && Input.GetKeyDown(KeyCode.F) && !OnPhone(HumanSeat)
                      && (cheats[HumanSeat] == null || !cheats[HumanSeat].InProgress))
@@ -94,30 +91,38 @@ namespace MahjongNight.Game
         private void StandUp()
         {
             standing = true;
-            walker.Place(RoomView.StandUpPoint(HumanSeat), 180f); // facing away from the table
-            avatars[HumanSeat].SetVisible(false);
+            walker.Place(RoomView.StandUpPoint(Seated.Origin), 180f); // facing away from the table
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
             hoveredTile = null;
             AddLog("You get up from the table.");
         }
 
-        private void SitDown()
+        /// <summary>Sit in your chair at <paramref name="tableIndex"/> and play there.</summary>
+        private void SitDown(int tableIndex)
         {
             standing = false;
             using_ = null;
-            avatars[HumanSeat].SetVisible(true);
+            seatedTable = tableIndex;
+            ctx = Seated;
+            hoveredTile = null;
+            headLook.SetSeat(avatars[HumanSeat].EyePosition, ctx.Origin);
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
-            headLook.AimNeutral();
-            AddLog("You sit back down.");
+            AddLog(tables.Count > 1 ? $"You sit down at table {tableIndex + 1}." : "You sit back down.");
         }
 
-        private bool NearChair()
+        /// <summary>The table whose chair you're standing behind, or -1.</summary>
+        private int NearestChair()
         {
             Vector3 p = walker.FeetPosition;
-            Vector3 chair = RoomView.StandUpPoint(HumanSeat);
-            return (new Vector2(p.x - chair.x, p.z - chair.z)).magnitude < 1.1f;
+            for (int i = 0; i < tables.Count; i++)
+            {
+                Vector3 chair = RoomView.StandUpPoint(tables[i].Origin);
+                if (new Vector2(p.x - chair.x, p.z - chair.z).magnitude < 1.1f)
+                    return i;
+            }
+            return -1;
         }
 
         private void UpdateInteractables(float now)
@@ -138,11 +143,12 @@ namespace MahjongNight.Game
             }
         }
 
-        private void Use(InteractKind kind, float now)
+        private void Use(Interactable thing, float now)
         {
+            InteractKind kind = thing.Kind;
             if (kind == InteractKind.Seat)
             {
-                SitDown();
+                SitDown(thing.TableIndex);
                 return;
             }
             double seconds = kind == InteractKind.Toilet ? needs.Rules.ToiletSeconds
@@ -158,13 +164,18 @@ namespace MahjongNight.Game
             humanAlive = false;
             string message = SurvivalNeeds.DeathMessage(cause);
             if (standing)
-                SitDown();
-            CancelCheats();
-            match.Eliminate(HumanSeat, message);
-            FlushMatchEvents();
+                SitDown(seatedTable);
+            foreach (TableContext t in tables)   // out at every table
+            {
+                ctx = t;
+                CancelCheats();
+                match.Eliminate(HumanSeat, message);
+                FlushMatchEvents();
+                nextBotTime = Time.time + 0.5f;
+            }
+            ctx = Seated;
             AddLog("YOU DIED. " + message);
-            ShowPopup("YOU DIED", message + "\nA house bot takes over your seat. You can't win this match.");
-            nextBotTime = Time.time + 0.5f;
+            ShowPopup("YOU DIED", message + "\nHouse bots take over your seats. You can't win.");
         }
 
         // ------------------------------------------------------------------ HUD
@@ -203,12 +214,12 @@ namespace MahjongNight.Game
                     case InteractKind.Toilet: prompt = "E — use the toilet"; break;
                     case InteractKind.Water: prompt = "E — drink water"; break;
                     case InteractKind.Food: prompt = "E — eat a bun"; break;
-                    case InteractKind.Seat: prompt = "E — sit back down"; break;
+                    case InteractKind.Seat: prompt = $"E — sit down at table {lookingAtInteractable.TableIndex + 1}"; break;
                 }
             }
-            else if (NearChair())
+            else if (NearestChair() >= 0)
             {
-                prompt = "F — sit back down";
+                prompt = tables.Count > 1 ? $"F — sit down at table {NearestChair() + 1}" : "F — sit back down";
             }
 
             if (prompt != null)
@@ -219,7 +230,7 @@ namespace MahjongNight.Game
                 GUI.Label(r, prompt, new GUIStyle(titleStyle) { alignment = TextAnchor.MiddleCenter });
             }
 
-            const string help = "You're away from the table — your turns play themselves.   WASD move · Shift sprint · E use · F sit (at your chair)";
+            const string help = "Each table's countdown keeps running while you're up.   WASD move · Shift sprint · E use · F sit (behind your chair)";
             float hw = TextWidth(logStyle, help) + Pad * 2;
             var hr = new Rect((Screen.width - hw) / 2f, Screen.height - LineHeight - Pad * 2, hw, LineHeight + Pad);
             GUI.Box(hr, GUIContent.none, boxStyle);
