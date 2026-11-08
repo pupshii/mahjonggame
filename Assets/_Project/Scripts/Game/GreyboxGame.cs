@@ -100,10 +100,10 @@ namespace MahjongNight.Game
             seedSource = new SeededRandom(seed != 0 ? (ulong)seed : (ulong)System.DateTime.Now.Ticks);
 
             SetUpCameraAndLight();
-            BuildTables();
-            headLook = new HeadLook(cam, avatars[HumanSeat].EyePosition, ctx.Origin);
-            SetUpLife();
-            NewMatchAll();
+            if (showDifficultyMenu)
+                menu = MenuMode.Start;     // Easy / Medium / Hard — see GreyboxGame.Menu
+            else
+                StartStage(null);          // straight in, with the Table Count from the inspector
         }
 
         private void SetUpCameraAndLight()
@@ -196,6 +196,8 @@ namespace MahjongNight.Game
 
         private void Update()
         {
+            if (UpdateMenu())
+                return;
             if (tables.Count == 0 || Seated.Match == null)
                 return;
             float now = Time.time;
@@ -773,6 +775,14 @@ namespace MahjongNight.Game
 
         private void OnGUI()
         {
+            if (menu != MenuMode.None)
+            {
+                EnsureStyles();
+                if (Event.current.type == EventType.Layout)
+                    uiRects.Clear();
+                DrawMenu();
+                return;
+            }
             if (tables.Count == 0)
                 return;
             ctx = Seated; // the UI is for the table you sit at
@@ -964,6 +974,7 @@ namespace MahjongNight.Game
             MatchPlayer me = match.Players[HumanSeat];
             var lines = new List<string>
             {
+                (difficulty.HasValue ? $"{DifficultyName(difficulty.Value)} · " : "") +
                 (tables.Count > 1 ? $"Table {ctx.Index + 1}/{tables.Count} · " : "") +
                 $"Hand {match.HandNumber}/{matchRules.HandsPerMatch} · {(classicRules ? "Classic" : "Party")} · {match.PrevailingWind} round · Wall {Hand.Wall.DrawableCount}",
                 HandLive ? $"Turn: {SeatName(Hand.CurrentSeat)}" : "Hand over",
@@ -971,7 +982,8 @@ namespace MahjongNight.Game
                 "Your upgrades: " + string.Join(" · ", Upgrades.All.Select(u => $"{Upgrades.Name(u)} {me.Level(u)}")),
                 NeedsLine(),
                 PhoneStatusLine(),
-                "<color=#aaa>Right-click/Tab: table view · Scroll: zoom · F: stand up / sit · P: phone</color>",
+                DogStatusLine(),
+                "<color=#aaa>Right-click/Tab: table view · Scroll: zoom · F: stand up / sit · P: phone · Esc: menu</color>",
             };
 
             float w = Mathf.Min(Screen.width * 0.45f, lines.Max(l => TextWidth(textStyle, l)) + Pad * 2 + 8);

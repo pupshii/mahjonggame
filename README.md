@@ -24,7 +24,10 @@ git clone https://github.com/pupshii/mahjonggame.git
 
 ## Playing the greybox
 1. Menu bar → **Mahjong Night → Create Greybox Scene** (first time only; commit the scene).
-   Later: **Mahjong Night → Open Greybox Scene**. Press **Play**.
+   Later: **Mahjong Night → Open Greybox Scene**. Press **Play** and pick a difficulty:
+   **Easy** (1 table), **Medium** (3 tables) or **Hard** (5 tables) — click, or press 1/2/3.
+   **Esc** pauses (everything freezes) and lets you restart on another difficulty. (Untick
+   *Show Difficulty Menu* on the GreyboxGame component to skip the menu and use *Table Count*.)
    **Five tables:** you hold a seat at 5 tables at once, each with its own 3 bots and its own
    match. A sign above every table shows a 30 s turn clock whenever it's waiting on you ("YOUR TURN
    14s"); when it hits 0 your move there is played for you. Only **one clock runs at a time**: the
@@ -53,6 +56,13 @@ git clone https://github.com/pupshii/mahjonggame.git
    onto your phone until you reply, and you can't act at the table meanwhile. Press **P** (or
    **1-3**) to call another player: they stare at their phone for ~5 s (45 s cooldown). Bots
    text too, and may call *you* when you're watching them too closely.
+   **Mochi (your dog)** texts more the hungrier they get: *content* → no texts, *peckish* →
+   every 70–120 s, *hungry* → every 35–60 s, *starving* → they **phone you howling** every
+   15–30 s. The status panel shows Mochi's bar. To feed them: walk to the club's **front door**
+   (middle of the south wall, "HOME 回家") and press **E** (6 s walk) → at home, **E** the dog
+   food bag to take a scoop (2 s) → **E** the red bowl → **E** your front door to walk back (6 s).
+   Give them a bowl of your **chicken soup** instead and they stay full for longer; **E** on
+   Mochi to pet them (a little less hungry, 30 s cooldown). The tables play on while you're out.
 7. **Survival:** Food, Water and Pee bars drain over time (walking/sprinting drains food and
    water faster; drinking fills your bladder). Press **F** to stand up, **WASD** to walk,
    **Shift** to sprint, **E** to use the toilet / water jar / food counter, **F** behind any of

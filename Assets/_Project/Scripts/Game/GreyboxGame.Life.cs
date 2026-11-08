@@ -33,6 +33,7 @@ namespace MahjongNight.Game
         {
             room = new RoomView(transform, HumanSeat, tables.Select(t => t.Origin).ToList());
             walker = new Walker(room);
+            SetUpHome();
         }
 
         private void ResetLife()
@@ -42,6 +43,7 @@ namespace MahjongNight.Game
             if (standing)
                 SitDown(seatedTable);
             using_ = null;
+            ResetHome();
             ResetPhones();
             ResetCooking();
         }
@@ -49,6 +51,7 @@ namespace MahjongNight.Game
         /// <summary>Runs before the table logic each frame: needs, walking, interactions, phones.</summary>
         private void UpdateLife(float now, float dt)
         {
+            UpdateHome(now, dt);
             UpdateHumanPhone(now);
 
             // Standing captures the mouse for looking around — but release it whenever there's
@@ -109,6 +112,7 @@ namespace MahjongNight.Game
         {
             standing = false;
             using_ = null;
+            atHome = false;
             seatedTable = tableIndex;
             ctx = Seated;
             hoveredTile = null;
@@ -149,7 +153,10 @@ namespace MahjongNight.Game
                     case InteractKind.Toilet: needs.UseToilet(); AddLog("Ahh. Much better."); break;
                     case InteractKind.Water: needs.Drink(); AddLog("You drink some water."); break;
                     case InteractKind.Food: needs.Eat(); AddLog("You eat a bun."); break;
-                    default: FinishSlicing(using_.Value); break;
+                    default:
+                        if (!FinishHomeAction(using_.Value))
+                            FinishSlicing(using_.Value);
+                        break;
                 }
                 using_ = null;
             }
@@ -163,7 +170,7 @@ namespace MahjongNight.Game
                 SitDown(thing.TableIndex);
                 return;
             }
-            if (TryCookingUse(thing, now))
+            if (TryHomeUse(thing, now) || TryCookingUse(thing, now))
                 return;
             double seconds = kind == InteractKind.Toilet ? needs.Rules.ToiletSeconds
                 : kind == InteractKind.Water ? needs.Rules.DrinkSeconds
@@ -264,7 +271,7 @@ namespace MahjongNight.Game
             if (using_.HasValue)
             {
                 float t = Mathf.Clamp01((Time.time - usingStarted) / Mathf.Max(0.01f, usingUntil - usingStarted));
-                string what = UsingText(using_.Value)
+                string what = HomeUsingText(using_.Value) ?? UsingText(using_.Value)
                     ?? (using_ == InteractKind.Toilet ? "Using the toilet" : using_ == InteractKind.Water ? "Drinking" : "Eating");
                 prompt = $"{what}…  {Mathf.RoundToInt(t * 100)}%";
             }
@@ -276,7 +283,7 @@ namespace MahjongNight.Game
                     case InteractKind.Water: prompt = "E — drink water"; break;
                     case InteractKind.Food: prompt = "E — eat a bun"; break;
                     case InteractKind.Seat: prompt = $"E — sit down at table {lookingAtInteractable.TableIndex + 1}"; break;
-                    default: prompt = CookingPrompt(lookingAtInteractable.Kind); break;
+                    default: prompt = HomePrompt(lookingAtInteractable.Kind) ?? CookingPrompt(lookingAtInteractable.Kind); break;
                 }
             }
             else if (lookingAtCustomer != null && CustomerOrder(lookingAtCustomer) != null)
@@ -298,7 +305,9 @@ namespace MahjongNight.Game
                 GUI.Label(r, prompt, new GUIStyle(titleStyle) { alignment = TextAnchor.MiddleCenter });
             }
 
-            const string help = "One table's turn clock runs at a time — the one that's waited longest.   WASD move · Shift sprint · E use · F sit (behind your chair)";
+            string help = atHome
+                ? "You're home. Your turn clocks keep running at the club.   WASD move · Shift sprint · E use · door: back to the club"
+                : "One table's turn clock runs at a time — the one that's waited longest.   WASD move · Shift sprint · E use · F sit (behind your chair)";
             float hw = TextWidth(logStyle, help) + Pad * 2;
             var hr = new Rect((Screen.width - hw) / 2f, Screen.height - LineHeight - Pad * 2, hw, LineHeight + Pad);
             GUI.Box(hr, GUIContent.none, boxStyle);

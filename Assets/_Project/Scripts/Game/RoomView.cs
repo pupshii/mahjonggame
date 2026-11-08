@@ -17,6 +17,12 @@ namespace MahjongNight.Game
         Onion,
         Garlic,
         Herbs,
+        // Going home
+        FrontDoor,  // the club's front door: head home
+        HomeDoor,   // your front door at home: head back to the club
+        DogFood,    // the bag of dog food: take a scoop
+        DogBowl,    // fill it (or give them your chicken soup)
+        Dog,        // pet them
     }
 
     /// <summary>Marks a room object you can use with E.</summary>
@@ -136,7 +142,30 @@ namespace MahjongNight.Game
             obstacles.Add(new Rect(foodPos.x - 0.5f, foodPos.z - 0.8f, 1.2f, 1.6f));
 
             BuildKitchen(root, corner, wood, white);
+
+            // The front door (middle of the south wall): head home to feed the dog.
+            GameObject door = Box(root, "FrontDoor", new Vector3(0f, FloorY + 1.05f, -HalfSize + 0.06f), new Vector3(1.0f, 2.1f, 0.08f),
+                TileFactory.CreateMaterial(new Color(0.3f, 0.16f, 0.08f)));
+            door.AddComponent<Interactable>().Kind = InteractKind.FrontDoor;
+            Box(root, "FrontDoorKnob", new Vector3(0.38f, FloorY + 1.0f, -HalfSize + 0.12f), new Vector3(0.06f, 0.06f, 0.06f),
+                TileFactory.CreateMaterial(new Color(0.85f, 0.7f, 0.3f))).AddComponent<Interactable>().Kind = InteractKind.FrontDoor;
+            Sign(root, "HOME  回家", new Vector3(0f, FloorY + 2.35f, -HalfSize + 0.08f), Quaternion.Euler(0f, 180f, 0f));
         }
+
+        /// <summary>Where you appear when you come back in through the front door (facing into the room).</summary>
+        public Vector3 DoorSpawn => new Vector3(0f, FloorY, -HalfSize + 0.7f);
+
+        private sealed class WalkArea
+        {
+            public Rect Bounds;   // x/z floor rectangle (inside the walls)
+            public List<Rect> Obstacles;
+        }
+
+        private readonly List<WalkArea> extraAreas = new List<WalkArea>();
+
+        /// <summary>Another walkable place outside the club (e.g. your home), reached by teleport.</summary>
+        public void AddWalkArea(Rect bounds, List<Rect> areaObstacles) =>
+            extraAreas.Add(new WalkArea { Bounds = bounds, Obstacles = areaObstacles });
 
         /// <summary>South-west corner: a counter with a stove (knob + burner + pot), a cutting board and the ingredients.</summary>
         private void BuildKitchen(Transform root, float corner, Material wood, Material white)
@@ -204,6 +233,19 @@ namespace MahjongNight.Game
         /// <summary>True if a body of <paramref name="radius"/> at floor point (x, z) would hit something.</summary>
         public bool Blocked(float x, float z, float radius)
         {
+            foreach (WalkArea a in extraAreas)
+            {
+                Rect b = a.Bounds;
+                if (x < b.xMin - 1f || x > b.xMax + 1f || z < b.yMin - 1f || z > b.yMax + 1f)
+                    continue;
+                if (x < b.xMin + radius || x > b.xMax - radius || z < b.yMin + radius || z > b.yMax - radius)
+                    return true;
+                foreach (Rect r in a.Obstacles)
+                    if (x > r.xMin - radius && x < r.xMax + radius && z > r.yMin - radius && z < r.yMax + radius)
+                        return true;
+                return false;
+            }
+
             float limit = HalfSize - 0.05f - radius;
             if (x < -limit || x > limit || z < -limit || z > limit)
                 return true;
@@ -213,13 +255,13 @@ namespace MahjongNight.Game
             return false;
         }
 
-        private static GameObject Box(Transform parent, string name, Vector3 pos, Vector3 scale, Material m) =>
+        internal static GameObject Box(Transform parent, string name, Vector3 pos, Vector3 scale, Material m) =>
             Prim(PrimitiveType.Cube, parent, name, pos, scale, m);
 
-        private static GameObject Cylinder(Transform parent, string name, Vector3 pos, Vector3 scale, Material m) =>
+        internal static GameObject Cylinder(Transform parent, string name, Vector3 pos, Vector3 scale, Material m) =>
             Prim(PrimitiveType.Cylinder, parent, name, pos, scale, m);
 
-        private static GameObject Prim(PrimitiveType type, Transform parent, string name, Vector3 pos, Vector3 scale, Material m)
+        internal static GameObject Prim(PrimitiveType type, Transform parent, string name, Vector3 pos, Vector3 scale, Material m)
         {
             GameObject go = GameObject.CreatePrimitive(type);
             go.name = name;
@@ -231,7 +273,7 @@ namespace MahjongNight.Game
         }
 
         /// <summary>A wall sign, readable from inside the room.</summary>
-        private static void Sign(Transform parent, string text, Vector3 pos, Quaternion rotation)
+        internal static TextMesh Sign(Transform parent, string text, Vector3 pos, Quaternion rotation)
         {
             var go = new GameObject("Sign " + text);
             go.transform.SetParent(parent, false);
@@ -246,6 +288,7 @@ namespace MahjongNight.Game
             tm.anchor = TextAnchor.MiddleCenter;
             tm.color = new Color(1f, 0.95f, 0.7f);
             go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
+            return tm;
         }
     }
 }

@@ -22,6 +22,7 @@ namespace MahjongNight.Game
             public string From;
             public string Message;
             public bool IsDogText;
+            public bool IsMochi;       // from your own dog (feed them to make it stop)
             public float MinUntil;     // can't put it down before this
             public float Until;        // calls and bot texts end by themselves
             public bool Replied;
@@ -79,7 +80,7 @@ namespace MahjongNight.Game
             }
             ctx = keep;
             humanPhone = null;
-            humanNextDogText = now + Range(40f, 90f);
+            humanNextDogText = now + Range(20f, 40f);
             humanCallReadyAt = now + 15f;
             phonePanelOpen = false;
         }
@@ -95,10 +96,12 @@ namespace MahjongNight.Game
                 if (done || !humanAlive)
                     PutPhoneAway(HumanSeat);
             }
-            else if (humanAlive && now >= humanNextDogText)
+            else if (humanAlive)
             {
-                humanNextDogText = now + Range(55f, 110f);
-                StartDogText(HumanSeat, now);
+                // How often Mochi messages you depends on how hungry they are (see GreyboxGame.Home).
+                ScheduleDogMessages(now);
+                if (now >= humanNextDogText && dog.MessageGap != null && !atHome)
+                    StartMochiMessage(now);
             }
 
             // Reply to the dog with 1-3 (no mouse needed).
@@ -272,6 +275,11 @@ namespace MahjongNight.Game
             var wrap = new GUIStyle(textStyle) { wordWrap = true };
             GUI.Label(new Rect(x, y, iw, LineHeight * 3), p.Message, wrap);
             y += LineHeight * 3.2f;
+            if (p.IsMochi)
+            {
+                GUI.Label(new Rect(x, y - LineHeight * 0.9f, iw, LineHeight), "<color=#ffcc40>Feed Mochi to make this stop: front door → home.</color>", logStyle);
+                y += LineHeight * 0.3f;
+            }
 
             if (p.IsDogText)
             {
