@@ -63,6 +63,8 @@ git clone https://github.com/pupshii/mahjonggame.git
    food bag to take a scoop (2 s) → **E** the red bowl → **E** your front door to walk back (6 s).
    Give them a bowl of your **chicken soup** instead and they stay full for longer; **E** on
    Latte to pet them (a little less hungry, 30 s cooldown). The tables play on while you're out.
+   When you walk in, Latte runs to the door, **stands up on their hind legs and claps** ("FINALLY!!
+   NOW. FOOD."), and keeps standing up to clap by the rug every few seconds until you feed them.
 7. **Survival:** Food, Water and Pee bars drain over time (walking/sprinting drains food and
    water faster; drinking fills your bladder). Press **F** to stand up, **WASD** to walk,
    **Shift** to sprint, **E** to use the toilet / water jar / food counter, **F** behind any of

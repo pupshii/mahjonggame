@@ -40,7 +40,7 @@ namespace MahjongNight.Game
         {
             if (humanAlive)
                 dog.Tick(dt);
-            home.Dog.Tick(dt, dog, cam.transform.position);
+            home.Dog.Tick(dt, dog, cam.transform.position, atHome);
 
             DogMood mood = dog.Mood;
             if (mood != lastDogMood && mood > lastDogMood)
@@ -183,6 +183,7 @@ namespace MahjongNight.Game
                 case InteractKind.FrontDoor:
                     atHome = true;
                     walker.Place(home.Spawn, 0f);
+                    home.Dog.Greet(dog.Mood != DogMood.Content);   // runs to the door, stands up and claps
                     ShowToast($"You're home. Latte is {Dog.Describe(dog.Mood)}.");
                     AddLog("You head home to see Latte. The tables play on without you.");
                     return true;
