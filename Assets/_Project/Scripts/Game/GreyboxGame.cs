@@ -184,6 +184,7 @@ namespace MahjongNight.Game
             pickedPocketIndex = -1;
 
             loggedHandEvents = 0;
+            ResetTrickshots();
             resultLines = new List<string>();
             paymentLines.Clear();
             FlushMatchEvents();
@@ -346,6 +347,7 @@ namespace MahjongNight.Game
                 : Hand.Phase == HandPhase.AwaitingDraw ? botTurnDelay * 0.6f
                 : botClaimDelay;
             nextBotTime = Time.time + delay * ctx.Pace;
+            UpdateReadiness();
             if (Hand.Phase == HandPhase.Ended && match.Phase == MatchPhase.PlayingHand)
                 OnHandEnded();
             RebuildTable();
@@ -371,6 +373,7 @@ namespace MahjongNight.Game
                         resultLines.Add($"    {item}   {FaanPatterns.ChineseName(item.Pattern)}");
                 }
             }
+            AnnounceTrickshotWins(result);
             match.ResolveHand();
             FlushMatchEvents();
             BotsShop();
@@ -383,7 +386,7 @@ namespace MahjongNight.Game
             for (int s = 0; s < HandState.SeatCount; s++)
                 if (cheats[s] != null && cheats[s].InProgress)
                     hidden[s] = cheats[s].HandTile;
-            table.Rebuild(Hand, HumanSeat, revealBotHands, hidden);
+            table.Rebuild(Hand, HumanSeat, revealBotHands, hidden, StackedSeats());
         }
 
         // ------------------------------------------------------------------ cheating
@@ -809,7 +812,7 @@ namespace MahjongNight.Game
             {
                 mouseGui = e.mousePosition;
                 hasMouse = true;
-                if (humanAlive && !OnPhone(HumanSeat))
+                if (humanAlive && !OnPhone(HumanSeat) && !InMiniGame)
                     UpdateHover(e.mousePosition);
                 else
                 {
@@ -1044,8 +1047,12 @@ namespace MahjongNight.Game
                     continue;
                 bool active = HandLive && Hand.CurrentSeat == s;
                 bool calling = brains[s] != null && brains[s].CallOutTarget >= 0;
+                int trick = match.Phase == MatchPhase.PlayingHand ? match.TrickshotMultiplier(s) : 1;
+                string fidget = HandLive ? avatars[s].Fiddling : null;
                 string text = (calling ? "<color=#ff6060>!!</color> " : active ? "> " : "") +
-                    $"{SeatName(s)} · {match.Players[s].Score} faan";
+                    $"{SeatName(s)} · {match.Players[s].Score} faan" +
+                    (trick > 1 ? $" · <color=#ffd040>tower ×{trick}</color>" : "") +
+                    (fidget != null ? $" · <color=#aaa><i>{fidget}</i></color>" : "");
                 GUIStyle style = active || hoveredAvatar == s ? titleStyle : textStyle;
                 float w = TextWidth(style, text) + Pad * 2;
                 float h = LineHeight + 4;
@@ -1269,7 +1276,10 @@ namespace MahjongNight.Game
             if (me.Concealed.Count + 3 * me.Melds.Count != 13)
                 return null;
             List<Tile> waits = FaanCalculator.GetWaits(me.Concealed, me.Melds, rules);
-            return waits.Count == 0 ? null : "Ready! Waiting on: " + string.Join(" ", waits);
+            if (waits.Count == 0)
+                return null;
+            string trick = TrickshotHint();
+            return "Ready! Waiting on: " + string.Join(" ", waits) + (trick != null ? "   ·   " + trick : "");
         }
 
         private string Describe(PlayerAction a)

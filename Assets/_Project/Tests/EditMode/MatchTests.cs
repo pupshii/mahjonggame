@@ -130,6 +130,48 @@ namespace MahjongNight.Core.Tests
         private static int Total(ScoreMatch m) => m.Players.Sum(p => p.Score);
 
         [Test]
+        public void Trickshot_MultipliesTheWinnersPayout_AndResetsEachHand()
+        {
+            bool sawWin = false;
+            for (ulong seed = 1; seed < 40 && !sawWin; seed++)
+            {
+                var plain = new ScoreMatch(RuleSet.Party(), MatchRules.Default(), seed);
+                var stacked = new ScoreMatch(RuleSet.Party(), MatchRules.Default(), seed);
+                plain.StartHand();
+                stacked.StartHand();
+                for (int s = 0; s < 4; s++)
+                    stacked.SetTrickshot(s, 2);
+                Assert.That(stacked.TrickshotMultiplier(1), Is.EqualTo(2));
+                PlayHandWithBots(plain, seed);
+                PlayHandWithBots(stacked, seed);
+                if (plain.Hand.Result.Outcome != HandOutcome.Win)
+                    continue;
+                sawWin = true;
+                int[] before = plain.Players.Select(p => p.Score).ToArray();
+                plain.ResolveHand();
+                stacked.ResolveHand();
+                for (int s = 0; s < 4; s++)
+                    Assert.That(stacked.Players[s].Score - before[s], Is.EqualTo(2 * (plain.Players[s].Score - before[s])), $"seed {seed}, seat {s}");
+                Assert.That(Total(stacked), Is.EqualTo(Total(plain)), "Still zero-sum");
+
+                if (stacked.Phase == MatchPhase.BetweenHands)
+                {
+                    stacked.StartHand();
+                    Assert.That(stacked.TrickshotMultiplier(1), Is.EqualTo(1), "A new hand starts without a stack");
+                }
+            }
+            Assert.That(sawWin, Is.True, "Some seed should produce a win");
+
+            var m = new ScoreMatch(RuleSet.Party(), MatchRules.Default(), 1);
+            Assert.Throws<System.InvalidOperationException>(() => m.SetTrickshot(0, 2), "Only during a hand");
+            m.StartHand();
+            m.SetTrickshot(0, 99);
+            Assert.That(m.TrickshotMultiplier(0), Is.EqualTo(ScoreMatch.MaxTrickshot));
+            m.SetTrickshot(0, 1);
+            Assert.That(m.TrickshotMultiplier(0), Is.EqualTo(1), "Knocked down");
+        }
+
+        [Test]
         public void StartHand_FillsPockets()
         {
             var match = new ScoreMatch(RuleSet.Party(), MatchRules.Default(), 1);

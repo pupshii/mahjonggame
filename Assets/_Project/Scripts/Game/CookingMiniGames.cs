@@ -68,6 +68,8 @@ namespace MahjongNight.Game
         public abstract string Instruction { get; }
         /// <summary>Gives up (and scores what you've got) after this long.</summary>
         public virtual float TimeLimit => 10f;
+        /// <summary>Played sitting at the table (true) rather than standing in the kitchen.</summary>
+        public virtual bool PlayedSeated => false;
         public bool Finished { get; protected set; }
         public double Score { get; protected set; }
         /// <summary>Optional extra word on the result ("SPILL!").</summary>
@@ -381,6 +383,88 @@ namespace MahjongNight.Game
             c.Circle(PotX, PotY, PotR, new Color(0.95f, 0.78f, 0.35f));
             c.Circle(spoon.x, spoon.y, 0.035f, new Color(0.6f, 0.4f, 0.2f));
             c.Label(0.05f, 0.2f, 0.3f, 0.1f, $"<b>{Mathf.FloorToInt(laps)}</b> / {TargetLaps:0} laps", c.Big);
+        }
+    }
+
+    /// <summary>
+    /// Trickshot: stack your ready hand into a leaning diagonal tower. A tile slides back and
+    /// forth above the stack — click to drop it onto the next step of the diagonal. Too far off
+    /// and the whole tower comes down. Every drop lands near-perfect: ×3. Otherwise: ×2.
+    /// </summary>
+    public sealed class TrickshotGame : CookingMiniGame
+    {
+        private const int Drops = 6;
+        private const float TileW = 0.13f, TileH = 0.075f, Lean = 0.06f, BaseX = 0.28f, FloorY = 0.88f;
+        private readonly List<float> placed = new List<float>();
+        private float slider = 0.1f, crashAt = -1f;
+        private int perfects;
+
+        public override string Title => "TRICKSHOT!";
+        public override string Instruction => "Click to drop each tile onto the next step of the diagonal — don't let it topple!";
+        public override float TimeLimit => 12f;
+        public override bool PlayedSeated => true;
+
+        private float Target(int level) => BaseX + level * Lean;
+
+        protected override void Step(float dt, Vector2 mouse, bool held, bool pressed, bool released)
+        {
+            if (crashAt >= 0f)
+            {
+                if (Elapsed - crashAt > 0.7f)
+                    Finish(0, "CRASH!");
+                return;
+            }
+            float speed = 0.5f + 0.13f * placed.Count;                 // faster as it gets taller
+            slider = 0.1f + Mathf.PingPong(Elapsed * speed, 0.8f);
+            if (!pressed)
+                return;
+            float error = Mathf.Abs(slider - Target(placed.Count));
+            placed.Add(slider);
+            if (error > TileW * 0.5f)
+            {
+                crashAt = Elapsed;                                      // watch it fall, then fail
+                return;
+            }
+            if (error < TileW * 0.13f)
+                perfects++;
+            if (placed.Count >= Drops)
+                Finish(perfects == Drops ? 100 : 75, perfects == Drops ? "×3 — flawless!" : "×2 — it stands!");
+        }
+
+        protected override void OnTimeout() => Finish(0, "Too slow — it slid apart");
+
+        public override void Draw(MiniCanvas c)
+        {
+            c.Fill(0.05f, FloorY, 0.9f, 0.02f, new Color(0.16f, 0.36f, 0.24f));      // the felt
+            c.Label(0.62f, 0.14f, 0.34f, 0.08f, $"{placed.Count} / {Drops}", c.Big);
+            c.Label(0.62f, 0.22f, 0.34f, 0.08f, perfects > 0 ? $"perfect: {perfects}" : "", c.Text);
+
+            // The ideal diagonal, as faint outlines.
+            for (int i = placed.Count; i < Drops; i++)
+                c.Fill(Target(i) - TileW / 2f, FloorY - (i + 1) * TileH, TileW, TileH - 0.006f, new Color(1f, 1f, 1f, 0.07f));
+
+            bool crashing = crashAt >= 0f;
+            float fall = crashing ? (Elapsed - crashAt) : 0f;
+            for (int i = 0; i < placed.Count; i++)
+            {
+                float x = placed[i] - TileW / 2f, y = FloorY - (i + 1) * TileH;
+                if (crashing)
+                {
+                    // Everything slides off and tumbles to the right.
+                    x += fall * fall * (0.4f + i * 0.12f);
+                    y = Mathf.Min(FloorY - TileH, y + fall * fall * 1.6f * (i + 1) * 0.3f);
+                }
+                c.Fill(x, y, TileW, TileH - 0.006f, new Color(0.96f, 0.94f, 0.86f));
+                c.Fill(x, y + TileH * 0.65f, TileW, TileH * 0.3f, new Color(0.1f, 0.45f, 0.3f));  // the coloured back
+            }
+
+            if (!crashing && !Finished)
+            {
+                float y = FloorY - (placed.Count + 1) * TileH - 0.1f;
+                c.Fill(slider - TileW / 2f, y, TileW, TileH - 0.006f, new Color(1f, 0.97f, 0.88f));
+                c.Fill(slider - TileW / 2f, y + TileH * 0.65f, TileW, TileH * 0.3f, new Color(0.1f, 0.45f, 0.3f));
+                c.DashedV(Target(placed.Count), y + TileH, FloorY - placed.Count * TileH, new Color(1f, 0.85f, 0.3f, 0.6f));
+            }
         }
     }
 }

@@ -51,6 +51,10 @@ namespace MahjongNight.Core
         private readonly MatchPlayer[] players = new MatchPlayer[HandState.SeatCount];
         private readonly List<MatchEvent> events = new List<MatchEvent>();
         private int dealerPasses;
+        private readonly int[] trickshot = { 1, 1, 1, 1 };
+
+        /// <summary>The biggest trickshot multiplier allowed.</summary>
+        public const int MaxTrickshot = 3;
 
         /// <param name="firstDealer">Who deals the first hand (East). Several tables can start with
         /// different dealers so their turns don't all line up.</param>
@@ -87,6 +91,8 @@ namespace MahjongNight.Core
             if (Phase != MatchPhase.BetweenHands)
                 throw new InvalidOperationException($"Can't start a hand during {Phase}.");
             HandNumber++;
+            for (int s = 0; s < trickshot.Length; s++)
+                trickshot[s] = 1;
             Hand = HandState.Deal(Rules, Dealer, PrevailingWind, rng.NextUInt64());
             foreach (MatchPlayer p in players)
             {
@@ -115,7 +121,7 @@ namespace MahjongNight.Core
                 {
                     int winner = result.Winners[i];
                     FaanResult score = FaanCalculator.Calculate(result.WinContexts[i], Rules);
-                    int faan = score?.Total ?? 0;
+                    int faan = (score?.Total ?? 0) * trickshot[winner];   // a standing trickshot stack multiplies the win
                     if (result.SelfDrawn)
                     {
                         for (int s = 0; s < players.Length; s++)
@@ -131,6 +137,22 @@ namespace MahjongNight.Core
 
             bool dealerKeeps = result.Outcome == HandOutcome.ExhaustiveDraw || result.Winners.Contains(Dealer);
             FinishHand(dealerKeeps);
+        }
+
+        // ------------------------------------------------------------------ trickshots
+
+        /// <summary>
+        /// A player with a ready hand stacked it into a diagonal tower: if they win this hand
+        /// (while it's still standing), every payment to them is multiplied. 1 = no trickshot.
+        /// </summary>
+        public int TrickshotMultiplier(int seat) => trickshot[seat];
+
+        /// <summary>Sets (or, with 1, knocks down) a seat's trickshot for the current hand.</summary>
+        public void SetTrickshot(int seat, int multiplier)
+        {
+            if (Phase != MatchPhase.PlayingHand)
+                throw new InvalidOperationException("No hand in progress.");
+            trickshot[seat] = Math.Max(1, Math.Min(MaxTrickshot, multiplier));
         }
 
         // ------------------------------------------------------------------ cheating

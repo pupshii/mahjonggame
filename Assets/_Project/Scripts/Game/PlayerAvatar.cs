@@ -54,6 +54,7 @@ namespace MahjongNight.Game
         {
             this.origin = origin;
             Seat = seat;
+            fiddleRng = new System.Random(seat * 7919 + Mathf.RoundToInt(origin.x * 13f + origin.z * 31f));
             frame = Quaternion.Euler(0f, -90f * relative, 0f);
             root = new GameObject($"Avatar{seat}").transform;
             root.SetParent(parent, false);
@@ -214,12 +215,81 @@ namespace MahjongNight.Game
                     carrying = true;
                     break;
                 default:
-                    local = RightRest;
+                    local = RightRest + Fiddle(time, out carrying);
                     break;
             }
             rightHand.position = World(local);
             carriedTile.gameObject.SetActive(carrying);
+            if (pose != HandPose.Rest)
+                carriedTile.localRotation = Quaternion.identity;
         }
+
+        // ------------------------------------------------------------------ idle fiddling
+
+        private enum FiddleKind { Tap, Spin, Click, Flip }
+
+        private static readonly string[] FiddleNames = { "tapping a tile", "spinning a tile", "clicking tiles together", "flipping a tile" };
+        private readonly System.Random fiddleRng;
+        private FiddleKind fiddleKind;
+        private float fiddleStart, fiddleEnd, nextFiddle = -1f;
+        private bool fiddling;
+
+        /// <summary>
+        /// How fidgety this player is while waiting (0 = still; 1 = now and then; higher = more).
+        /// Set by the game each frame: someone one tile from winning can't keep their hands still.
+        /// </summary>
+        public float FiddleRate { get; set; }
+
+        /// <summary>What they're fiddling with right now, or null.</summary>
+        public string Fiddling => fiddling ? FiddleNames[(int)fiddleKind] : null;
+
+        /// <summary>Idle hand movement around the resting spot; may show a tile in the hand.</summary>
+        private Vector3 Fiddle(float time, out bool holdingTile)
+        {
+            holdingTile = false;
+            fiddling = false;
+            if (FiddleRate <= 0f)
+            {
+                nextFiddle = -1f;
+                return Vector3.zero;
+            }
+            if (nextFiddle < 0f)
+                nextFiddle = time + Rand(1f, 6f) / FiddleRate;
+            if (time >= nextFiddle && time >= fiddleEnd)
+            {
+                fiddleKind = (FiddleKind)fiddleRng.Next(4);
+                fiddleStart = time;
+                fiddleEnd = time + Rand(0.9f, 1.8f);
+                nextFiddle = fiddleEnd + Rand(3f, 8f) / Mathf.Max(0.2f, FiddleRate);
+            }
+            if (time >= fiddleEnd)
+            {
+                carriedTile.localRotation = Quaternion.identity;
+                return Vector3.zero;
+            }
+            fiddling = true;
+            float p = (time - fiddleStart) / (fiddleEnd - fiddleStart);
+            float lift = Mathf.Sin(p * Mathf.PI);
+            switch (fiddleKind)
+            {
+                case FiddleKind.Tap:        // drumming a tile edge on the felt
+                    return new Vector3(0f, Mathf.Abs(Mathf.Sin(p * Mathf.PI * 7f)) * 0.025f, 0.02f);
+                case FiddleKind.Spin:       // twirling a tile on its corner
+                    holdingTile = true;
+                    carriedTile.localRotation = Quaternion.Euler(0f, p * 1080f, 0f);
+                    return new Vector3(-0.04f, 0.03f + lift * 0.03f, 0.05f);
+                case FiddleKind.Click:      // clacking two tiles together
+                    holdingTile = true;
+                    carriedTile.localRotation = Quaternion.identity;
+                    return new Vector3(Mathf.Sin(p * Mathf.PI * 6f) * 0.03f, 0.02f, 0.04f);
+                default:                    // flipping one over and back
+                    holdingTile = true;
+                    carriedTile.localRotation = Quaternion.Euler(p * 360f, 0f, 0f);
+                    return new Vector3(0f, lift * 0.06f, 0.04f);
+            }
+        }
+
+        private float Rand(float min, float max) => min + (float)fiddleRng.NextDouble() * (max - min);
 
         private bool shuffling;
         private float shuffleTime;

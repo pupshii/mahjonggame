@@ -52,6 +52,9 @@ namespace MahjongNight.Game
             public int MatchesPlayed;
             public TextMesh Label;
             public ShuffleView Shuffle;  // washing the tiles before the hand starts
+            public readonly bool[] Ready = new bool[HandState.SeatCount];        // one tile from winning
+            public readonly bool[] TrickTried = new bool[HandState.SeatCount];   // had their trickshot go this hand
+            public readonly float[] BotTrickAt = new float[HandState.SeatCount];
 
             // Bots' phones at this table (yours is global — you only have one phone).
             public readonly PhoneState[] Phones = new PhoneState[HandState.SeatCount];
@@ -165,6 +168,7 @@ namespace MahjongNight.Game
                 if (HandLive) UpdateBotCheating(now);
                 if (HandLive) UpdateSpotting(now, dt);
                 if (HandLive) UpdateTurns(now);
+                if (HandLive) UpdateBotTrickshots(now);
             }
             else if (match.Phase == MatchPhase.BetweenHands && ctx.AutoNextHandAt > 0f && now >= ctx.AutoNextHandAt)
             {
@@ -189,6 +193,9 @@ namespace MahjongNight.Game
                 else
                 {
                     avatars[s].SetShuffling(false, now);
+                    // Idle fiddling while waiting — twice as much when they're one tile from winning (a tell).
+                    bool idle = s != HumanSeat && HandLive && Hand.CurrentSeat != s && !OnPhone(s);
+                    avatars[s].FiddleRate = idle ? (ctx.Ready[s] ? 2.5f : 1f) : 0f;
                     CheatMotion c = cheats[s];
                     bool active = c != null && c.InProgress;
                     avatars[s].SetRightHand(active ? c.Pose : HandPose.Rest, active ? c.Progress(now) : 0f, now);

@@ -45,11 +45,13 @@ namespace MahjongNight.Game
         {
             if (miniGame == null)
                 return;
-            if (!humanAlive || !standing || OnPhone(HumanSeat))
+            bool wrongPlace = miniGame.PlayedSeated ? standing : !standing;
+            if (!humanAlive || wrongPlace || OnPhone(HumanSeat))
             {
+                bool phone = OnPhone(HumanSeat);
                 CancelMiniGame();
                 if (humanAlive)
-                    ShowToast("Your phone! You lost your place — try that again.");
+                    ShowToast(phone ? "Your phone! You lost your place — try that again." : "You got up — that's over.");
                 return;
             }
             Rect r = MiniGameRect();

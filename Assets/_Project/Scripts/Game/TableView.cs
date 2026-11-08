@@ -61,7 +61,9 @@ namespace MahjongNight.Game
         /// <summary>World point at the top of the human's hand, for placing the action bar above it.</summary>
         public Vector3 HumanHandTop => origin + new Vector3(0f, TileFactory.Height + 0.01f, HandZ + 0.02f);
 
-        public void Rebuild(HandState hand, int humanSeat, bool revealBots, IReadOnlyDictionary<int, Tile> hiddenTiles = null)
+        /// <param name="stacked">Seats whose hand is stacked into a trickshot tower (see <see cref="BuildConcealed"/>).</param>
+        public void Rebuild(HandState hand, int humanSeat, bool revealBots, IReadOnlyDictionary<int, Tile> hiddenTiles = null,
+                            IReadOnlyList<bool> stacked = null)
         {
             for (int i = tilesRoot.childCount - 1; i >= 0; i--)
             {
@@ -80,7 +82,7 @@ namespace MahjongNight.Game
                 bool isHuman = seat == humanSeat;
 
                 Tile? hidden = hiddenTiles != null && hiddenTiles.TryGetValue(seat, out Tile h) ? h : (Tile?)null;
-                BuildConcealed(hand, s, frame, isHuman, isHuman || revealBots || ended, hidden);
+                BuildConcealed(hand, s, frame, isHuman, isHuman || revealBots || ended, hidden, stacked != null && stacked[seat]);
                 BuildMeldsAndBonus(s, frame);
                 BuildDiscards(hand, s, frame);
             }
@@ -89,7 +91,15 @@ namespace MahjongNight.Game
 
         // ------------------------------------------------------------------ seats
 
-        private void BuildConcealed(HandState hand, SeatState s, Quaternion frame, bool isHuman, bool showFaces, Tile? hidden)
+        private const float StackX = -0.24f;     // a trickshot tower starts here (seat-local x)...
+        private const float StackStep = 0.55f;   // ...and each tile sits this many tile widths further right, one tile higher
+
+        /// <param name="stacked">
+        /// A trickshot: the hand lies stacked in a leaning diagonal tower, each tile one higher and
+        /// half a tile further right (face up for you, face down for the bots). Your freshly drawn
+        /// tile stays apart, upright, on the right.
+        /// </param>
+        private void BuildConcealed(HandState hand, SeatState s, Quaternion frame, bool isHuman, bool showFaces, Tile? hidden, bool stacked)
         {
             List<Tile> tiles = s.Concealed.OrderBy(t => t).ToList();
             if (hidden.HasValue)
@@ -112,7 +122,21 @@ namespace MahjongNight.Game
 
             for (int i = 0; i < tiles.Count; i++)
             {
-                if (drawn.HasValue && i == tiles.Count - 1)
+                bool isDrawn = drawn.HasValue && i == tiles.Count - 1;
+                if (stacked && !isDrawn)
+                {
+                    bool faceUp = isHuman || showFaces;
+                    var pos = new Vector3(StackX + i * TileFactory.Width * StackStep, TileFactory.Depth / 2f + i * TileFactory.Depth, HandZ + 0.04f);
+                    TileView piece = Place(tiles[i], faceUp, frame, pos, Quaternion.Euler(faceUp ? 90f : -90f, 0f, 0f));
+                    piece.Seat = s.Seat;
+                    piece.InHand = true;
+                    if (isHuman)
+                        humanHand.Add(piece);
+                    continue;
+                }
+                if (stacked)
+                    x = StackX + tiles.Count * TileFactory.Width * StackStep + 0.06f;   // the drawn tile, beside the tower
+                else if (isDrawn)
                     x += gap;
 
                 Quaternion local;

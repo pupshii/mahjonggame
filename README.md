@@ -50,9 +50,19 @@ git clone https://github.com/pupshii/mahjonggame.git
    2) pick one of your 5 pocket tiles (outside the game), 3) slip it into your hand. Anyone
    watching your hands during the motion can call you out: you pay 10 faan to each player and
    the hand ends.
-5. **Catch cheaters:** if you see a bot reach under the table, press **SPACE** (calls out whoever
+5. **Trickshot:** when your hand is **ready** (one tile from winning — the hint above your hand
+   says "Ready! Waiting on…"), press **T** to stack it into a leaning diagonal tower: a tile
+   slides back and forth above the stack, click to drop it onto the next step of the diagonal
+   (6 drops, faster each time; too far off and it all crashes down). If it stands, your hand
+   stays stacked on the table — and if you **win this hand while it's up, every payment to you
+   is ×2** (×3 if every drop was near-perfect). One try per hand. Change your hand so it's no
+   longer ready and the tower topples. Bots with ready hands try it too (a tower going up — or
+   crashing — means they're one tile away; their name tag shows "tower ×2").
+   **Idle fiddling:** while they wait, players tap, spin, flip and clack tiles together — and
+   someone who's ready fiddles a lot more. Their name tag shows what they're fiddling with.
+6. **Catch cheaters:** if you see a bot reach under the table, press **SPACE** (calls out whoever
    you're looking at) or click them. A wrong call costs you 3 faan.
-6. **Phone:** your dog texts you now and then ("when r u coming home??") — your view is forced
+7. **Phone:** your dog texts you now and then ("when r u coming home??") — your view is forced
    onto your phone until you reply, and you can't act at the table meanwhile. **1-3** quick-call
    another player at your table: they stare at their phone for ~5 s (45 s cooldown). Bots text
    too, and may call *you* when you're watching them too closely.
@@ -78,13 +88,13 @@ git clone https://github.com/pupshii/mahjonggame.git
    drops to all fours when they get there. **E** their **blue ball** to throw it: Latte fetches it
    back to your feet (a little less hungry, like petting). Left alone they boop it around the rug.
    (A starving Latte won't play: food first.)
-7. **Survival:** Food, Water and Pee bars drain over time (walking/sprinting drains food and
+8. **Survival:** Food, Water and Pee bars drain over time (walking/sprinting drains food and
    water faster; drinking fills your bladder). Press **F** to stand up, **WASD** to walk,
    **Shift** to sprint, **E** to use the toilet / water jar / food counter, **F** behind any of
    your chairs to sit down at that table. Your turn clocks keep running while you're up (one at a time). If any bar hits 0 you die: every table stops, a death screen
    shows for 5 s, then the whole stage restarts (new matches everywhere, full bars, banked faan
    cleared). (Bots don't have bars yet.)
-8. **Cooking (you're the club manager):** now and then a customer orders **chicken soup** (bubble
+9. **Cooking (you're the club manager):** now and then a customer orders **chicken soup** (bubble
    above their head with a 4-minute timer; at most 2 orders open). In the **kitchen** (south-west
    corner) every step is a quick **mouse mini-game**, scored PERFECT / GREAT / OK / OOPS:
    - **E the stove knob — Light the stove:** a needle sweeps back and forth; click in the flame.
@@ -100,16 +110,16 @@ git clone https://github.com/pupshii/mahjonggame.git
      you go) sets the tip: 8 faan base, **+5 PERFECT, +2 GREAT, 0 OK, -4 OOPS**.
    A phone call or text knocks you out of a mini-game (just try again). Late orders cost you a
    5 faan refund; a finished pot left on a lit stove burns after 60 s.
-9. **Shuffling (every hand):** before each hand the table washes its tiles by hand — all 144
+10. **Shuffling (every hand):** before each hand the table washes its tiles by hand — all 144
    tip face-down into the middle and everyone's hands swirl them around (clack clack clack).
    At your table, **hold the left mouse button and sweep through the tiles** to help: they get
    pushed around under your hand and the shuffle bar fills much faster (about 6 s with the bots
    alone, ~2–3 s if you really go for it). Then the tiles fly into four walls of 18 stacks and
    the hands are dealt. Nobody plays, and no turn clock runs, until that's done.
-10. **Between hands:** winners collect faan (discarder pays, or everyone on a self-draw); spend
+11. **Between hands:** winners collect faan (discarder pays, or everyone on a self-draw); spend
    faan on upgrades (Sleight of Hand, Deep Pockets, Poker Face, Eagle Eye). Highest faan after
    8 hands wins.
-11. Inspector options on **Greybox Game**: Classic rules, choose-your-draw, match length,
+12. Inspector options on **Greybox Game**: Classic rules, choose-your-draw, match length,
    penalties, bot nerve / spot chance, pacing, reveal bot hands, fixed seed.
 
 ## Running tests

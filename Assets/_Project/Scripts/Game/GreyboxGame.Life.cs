@@ -54,6 +54,9 @@ namespace MahjongNight.Game
             UpdateHome(now, dt);
             UpdateHumanPhone(now);
             UpdateDrums(dt);
+            UpdateMiniGame(dt);
+            if (!standing && humanAlive && Input.GetKeyDown(KeyCode.T))
+                TryHumanTrickshot();
 
             // Standing captures the mouse for looking around — but release it whenever there's
             // something on screen to click (phone, call panel, popup, results/shop).
@@ -80,7 +83,6 @@ namespace MahjongNight.Game
             {
                 walker.ApplyTo(cam);
                 UpdateInteractables(now);
-                UpdateMiniGame(dt);
                 if (Input.GetKeyDown(KeyCode.E) && !using_.HasValue && !OnPhone(HumanSeat) && !InMiniGame)
                 {
                     if (lookingAtInteractable != null)
