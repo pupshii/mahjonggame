@@ -52,6 +52,9 @@ namespace MahjongNight.Game
 
         }
 
+        /// <summary>Hide the table's tiles (while the shuffle animation plays) or show them again.</summary>
+        public void SetTilesVisible(bool visible) => tilesRoot.gameObject.SetActive(visible);
+
         /// <summary>The human's clickable hand tiles from the last rebuild.</summary>
         public IReadOnlyList<TileView> HumanHand => humanHand;
 

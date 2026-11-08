@@ -221,6 +221,25 @@ namespace MahjongNight.Game
             carriedTile.gameObject.SetActive(carrying);
         }
 
+        private bool shuffling;
+        private float shuffleTime;
+
+        /// <summary>
+        /// Washing the tiles before a hand: both hands sweep circles over the middle of the table —
+        /// or, for you, the right hand goes wherever you put it (<paramref name="rightWorld"/>).
+        /// </summary>
+        public void SetShuffling(bool on, float time, Vector3? rightWorld = null)
+        {
+            shuffling = on;
+            shuffleTime = time;
+            if (!on)
+                return;
+            const float w = 3.4f;
+            rightHand.position = rightWorld ?? World(new Vector3(0.12f + Mathf.Sin(time * w + Seat) * 0.16f, 0.04f,
+                                                                 -0.38f + Mathf.Cos(time * w + Seat) * 0.13f));
+            carriedTile.gameObject.SetActive(false);
+        }
+
         public void Tick(float dt, bool followGaze)
         {
             if (followGaze)
@@ -229,7 +248,10 @@ namespace MahjongNight.Game
                 if (dir.sqrMagnitude > 1e-6f)
                     head.rotation = Quaternion.Slerp(head.rotation, Quaternion.LookRotation(dir), 1f - Mathf.Exp(-HeadTurnSpeed * dt));
             }
-            leftHand.position = World(LeftRest);
+            leftHand.position = shuffling
+                ? World(new Vector3(-0.12f + Mathf.Sin(shuffleTime * 3.1f + 2f + Seat) * 0.16f, 0.04f,
+                                    -0.38f + Mathf.Cos(shuffleTime * 3.1f + 2f + Seat) * 0.13f))
+                : World(LeftRest);
             UpdateArms();
         }
 

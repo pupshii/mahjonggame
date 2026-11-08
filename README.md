@@ -100,10 +100,16 @@ git clone https://github.com/pupshii/mahjonggame.git
      you go) sets the tip: 8 faan base, **+5 PERFECT, +2 GREAT, 0 OK, -4 OOPS**.
    A phone call or text knocks you out of a mini-game (just try again). Late orders cost you a
    5 faan refund; a finished pot left on a lit stove burns after 60 s.
-9. **Between hands:** winners collect faan (discarder pays, or everyone on a self-draw); spend
+9. **Shuffling (every hand):** before each hand the table washes its tiles by hand — all 144
+   tip face-down into the middle and everyone's hands swirl them around (clack clack clack).
+   At your table, **hold the left mouse button and sweep through the tiles** to help: they get
+   pushed around under your hand and the shuffle bar fills much faster (about 6 s with the bots
+   alone, ~2–3 s if you really go for it). Then the tiles fly into four walls of 18 stacks and
+   the hands are dealt. Nobody plays, and no turn clock runs, until that's done.
+10. **Between hands:** winners collect faan (discarder pays, or everyone on a self-draw); spend
    faan on upgrades (Sleight of Hand, Deep Pockets, Poker Face, Eagle Eye). Highest faan after
    8 hands wins.
-10. Inspector options on **Greybox Game**: Classic rules, choose-your-draw, match length,
+11. Inspector options on **Greybox Game**: Classic rules, choose-your-draw, match length,
    penalties, bot nerve / spot chance, pacing, reveal bot hands, fixed seed.
 
 ## Running tests

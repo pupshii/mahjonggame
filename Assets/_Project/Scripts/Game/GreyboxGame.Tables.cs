@@ -51,6 +51,7 @@ namespace MahjongNight.Game
             public int BankedFaan;       // your faan from finished matches at this table
             public int MatchesPlayed;
             public TextMesh Label;
+            public ShuffleView Shuffle;  // washing the tiles before the hand starts
 
             // Bots' phones at this table (yours is global — you only have one phone).
             public readonly PhoneState[] Phones = new PhoneState[HandState.SeatCount];
@@ -97,7 +98,7 @@ namespace MahjongNight.Game
 
         private void BuildTables()
         {
-            var factory = new TileFactory();
+            var factory = tileFactory = new TileFactory();
             Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             List<Vector3> origins = TableOrigins(tableCount);
             for (int i = 0; i < origins.Count; i++)
@@ -146,6 +147,8 @@ namespace MahjongNight.Game
         private void UpdateTable(float now, float dt)
         {
             UpdateBotPhones(now);
+            if (Shuffling)
+                UpdateShuffle(now, dt);
 
             for (int s = 0; s < HandState.SeatCount; s++)
             {
@@ -177,9 +180,19 @@ namespace MahjongNight.Game
                 avatars[HumanSeat].SetHeadRotation(headLook.HeadRotation);
             for (int s = 0; s < HandState.SeatCount; s++)
             {
-                CheatMotion c = cheats[s];
-                bool active = c != null && c.InProgress;
-                avatars[s].SetRightHand(active ? c.Pose : HandPose.Rest, active ? c.Progress(now) : 0f, now);
+                // Washing the tiles: bots' hands swirl by themselves; yours only while you're helping.
+                bool washing = Shuffling && (s != HumanSeat || (AtThisTable && shufflePalm.HasValue));
+                if (washing)
+                {
+                    avatars[s].SetShuffling(true, now, s == HumanSeat ? shufflePalm : null);
+                }
+                else
+                {
+                    avatars[s].SetShuffling(false, now);
+                    CheatMotion c = cheats[s];
+                    bool active = c != null && c.InProgress;
+                    avatars[s].SetRightHand(active ? c.Pose : HandPose.Rest, active ? c.Progress(now) : 0f, now);
+                }
                 avatars[s].Tick(dt, followGaze: s != HumanSeat);
             }
 
@@ -252,6 +265,11 @@ namespace MahjongNight.Game
                     label.color = secs <= 5 ? new Color(1f, 0.25f, 0.2f) : secs <= 10 ? new Color(1f, 0.75f, 0.2f) : new Color(1f, 1f, 0.6f);
                 }
             }
+            else if (Shuffling)
+            {
+                label.text = $"{title}\nshuffling…";
+                label.color = new Color(0.75f, 1f, 0.8f);
+            }
             else if (match.Phase == MatchPhase.BetweenHands)
             {
                 label.text = $"{title}\nnext hand in {Mathf.Max(0, Mathf.CeilToInt(ctx.AutoNextHandAt - now))}s";
@@ -285,6 +303,7 @@ namespace MahjongNight.Game
                     ? $"<color=#b8b890>{(claim ? "CLAIM?" : "YOUR TURN")} {SecondsLeft()}s · on hold #{QueuePlace + 1}</color>"
                     : WaitingOnHuman
                     ? $"<color={(SecondsLeft() <= 5 ? "#ff5050" : "#ffcc40")}>{(claim ? "CLAIM?" : "YOUR TURN")} {SecondsLeft()}s</color>"
+                    : Shuffling ? "<color=#a0ffb0>shuffling…</color>"
                     : match.Phase == MatchPhase.MatchOver ? "new match soon"
                     : match.Phase == MatchPhase.BetweenHands ? "between hands"
                     : $"hand {match.HandNumber}/{matchRules.HandsPerMatch}";

@@ -101,6 +101,7 @@ namespace MahjongNight.Game
 
             SetUpCameraAndLight();
             SetUpSounds();
+            SetUpShuffleSounds();
             if (showDifficultyMenu)
                 menu = MenuMode.Start;     // Easy / Medium / Hard — see GreyboxGame.Menu
             else
@@ -189,9 +190,11 @@ namespace MahjongNight.Game
             if (ctx == Seated)
                 AddLog($"Your pocket: {string.Join(" ", match.Players[HumanSeat].Pocket)}");
             OnHandChanged();
+            BeginShuffle();   // the hand is dealt, but first everyone washes the tiles
         }
 
-        private bool HandLive => match.Phase == MatchPhase.PlayingHand && Hand.Phase != HandPhase.Ended;
+        /// <summary>The hand is being played (not over, and the tiles aren't still being shuffled).</summary>
+        private bool HandLive => !Shuffling && match.Phase == MatchPhase.PlayingHand && Hand.Phase != HandPhase.Ended;
 
         // ------------------------------------------------------------------ frame update
 
@@ -857,7 +860,7 @@ namespace MahjongNight.Game
             if (standing)
             {
                 DrawStandingHud();
-                if (!HandLive)
+                if (!HandLive && !Shuffling)
                     DrawBetweenHands(); // results + shop still need to be reachable while you're up
             }
             else if (HandLive)
@@ -874,6 +877,10 @@ namespace MahjongNight.Game
                     DrawTableViewHint();
                 else if (!headLook.LookingDown && seatedAndFree)
                     DrawLookHint();
+            }
+            else if (Shuffling)
+            {
+                DrawShuffleHint();
             }
             else
             {
@@ -979,7 +986,7 @@ namespace MahjongNight.Game
                 (difficulty.HasValue ? $"{DifficultyName(difficulty.Value)} · " : "") +
                 (tables.Count > 1 ? $"Table {ctx.Index + 1}/{tables.Count} · " : "") +
                 $"Hand {match.HandNumber}/{matchRules.HandsPerMatch} · {(classicRules ? "Classic" : "Party")} · {match.PrevailingWind} round · Wall {Hand.Wall.DrawableCount}",
-                HandLive ? $"Turn: {SeatName(Hand.CurrentSeat)}" : "Hand over",
+                HandLive ? $"Turn: {SeatName(Hand.CurrentSeat)}" : Shuffling ? "Shuffling the tiles…" : "Hand over",
                 ScoresLine(),
                 "Your upgrades: " + string.Join(" · ", Upgrades.All.Select(u => $"{Upgrades.Name(u)} {me.Level(u)}")),
                 NeedsLine(),
