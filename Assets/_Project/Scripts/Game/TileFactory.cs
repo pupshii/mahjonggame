@@ -39,6 +39,13 @@ namespace MahjongNight.Game
         private static Shader litShader;
 
         /// <summary>
+        /// Mentioned so device builds keep these engine classes: CreatePrimitive adds them behind the
+        /// scenes, and without them nothing can be tapped or clicked (see also Assets/link.xml).
+        /// </summary>
+        internal static readonly System.Type[] PrimitiveColliders =
+            { typeof(BoxCollider), typeof(SphereCollider), typeof(CapsuleCollider), typeof(MeshCollider) };
+
+        /// <summary>
         /// A plain coloured material. Device builds only contain shaders something references, so
         /// fall back through shaders that are always in a build ("Legacy Shaders/Diffuse" is on
         /// the default Always Included list) rather than crash on a missing one. Phones use that

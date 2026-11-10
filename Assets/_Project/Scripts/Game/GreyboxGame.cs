@@ -103,10 +103,27 @@ namespace MahjongNight.Game
             SetUpSounds();
             SetUpShuffleSounds();
             SetUpTouch();
+            CheckCollidersSurvivedTheBuild();
             if (showDifficultyMenu)
                 menu = MenuMode.Start;     // Easy / Medium / Hard — see GreyboxGame.Menu
             else
                 StartStage(null);          // straight in, with the Table Count from the inspector
+        }
+
+        /// <summary>
+        /// Everything you tap or click is found through colliders that CreatePrimitive adds. If a
+        /// device build stripped them, say so on the menu instead of silently ignoring taps.
+        /// </summary>
+        private void CheckCollidersSurvivedTheBuild()
+        {
+            GameObject probe = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            bool ok = probe.GetComponent<Collider>() != null && TileFactory.PrimitiveColliders.Length > 0;
+            Destroy(probe);
+            if (!ok)
+            {
+                startError = "This build has no colliders (stripped), so tiles can't be tapped. Rebuild with Assets/link.xml in the project.";
+                Debug.LogError(startError);
+            }
         }
 
         private void SetUpCameraAndLight()

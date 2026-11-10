@@ -1,0 +1,13 @@
+<!--
+  Device builds strip engine classes that nothing in the project seems to use. The game makes all
+  its objects with GameObject.CreatePrimitive, which adds these colliders behind the scenes —
+  without them, tapping tiles (and players, chairs, the stove…) finds nothing. Keep them.
+-->
+<linker>
+  <assembly fullname="UnityEngine.PhysicsModule">
+    <type fullname="UnityEngine.BoxCollider" preserve="all" />
+    <type fullname="UnityEngine.SphereCollider" preserve="all" />
+    <type fullname="UnityEngine.CapsuleCollider" preserve="all" />
+    <type fullname="UnityEngine.MeshCollider" preserve="all" />
+  </assembly>
+</linker>
