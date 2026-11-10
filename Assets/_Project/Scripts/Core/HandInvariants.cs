@@ -66,21 +66,22 @@ namespace MahjongNight.Core
             return problems;
         }
 
-        /// <summary>Concealed + 3 × melds: 14 for whoever holds an extra tile, else 13. -1 = skip check.</summary>
+        /// <summary>Concealed + 3 × melds: hand size + 1 for whoever holds an extra tile, else the hand size (13 or 16). -1 = skip check.</summary>
         private static int ExpectedHandSize(HandState hand, int seat)
         {
+            int size = hand.Rules.HandSize;
             switch (hand.Phase)
             {
                 case HandPhase.AwaitingAction:
                 case HandPhase.AwaitingRobKong:
-                    return seat == hand.CurrentSeat ? 14 : 13;
+                    return seat == hand.CurrentSeat ? size + 1 : size;
                 case HandPhase.AwaitingClaims:
                 case HandPhase.AwaitingDraw:
-                    return 13;
+                    return size;
                 case HandPhase.Ended:
                     if (hand.Result.Outcome != HandOutcome.Win)
                         return -1; // the wall may run out mid-turn; a caught cheat stops mid-turn
-                    return hand.Result.Winners[0] == seat ? 14 : 13;
+                    return hand.Result.Winners[0] == seat ? size + 1 : size;
                 default:
                     return -1;
             }

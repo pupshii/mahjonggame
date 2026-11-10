@@ -54,6 +54,9 @@ Touch controls switch on by themselves on a phone or tablet (to try them in the 
    the party stuff — no cheating or call-outs, no phone or texts, no standing up, no hunger /
    thirst / pee, no customers, no trickshots, no upgrade shop and no turn clock. (The tiles are
    still shuffled by hand before each hand.)
+   **Hand size:** the button above the modes switches between **16-tile** mahjong (16 in hand,
+   **five sets + a pair** to win — the default) and **13-tile** Hong Kong style (four sets + a
+   pair). The choice is remembered; Seven Pairs / Thirteen Orphans only exist in 13-tile hands.
    **Esc** pauses (everything freezes) and lets you restart on another difficulty. (Untick
    *Show Difficulty Menu* on the GreyboxGame component to skip the menu and use *Table Count*.)
    **Five tables:** you hold a seat at 5 tables at once, each with its own 3 bots and its own

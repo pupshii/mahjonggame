@@ -22,7 +22,7 @@ namespace MahjongNight.Game
         private void BeginShuffle()
         {
             EndShuffle();
-            ctx.Shuffle = new ShuffleView(transform, tileFactory, ctx.Origin, (int)(seedSource.NextUInt64() & 0x7fffffff));
+            ctx.Shuffle = new ShuffleView(transform, tileFactory, ctx.Origin, (int)(seedSource.NextUInt64() & 0x7fffffff), rules.HandSize);
             table.SetTilesVisible(false);
         }
 

@@ -104,6 +104,7 @@ namespace MahjongNight.Game
             SetUpShuffleSounds();
             SetUpTouch();
             CheckCollidersSurvivedTheBuild();
+            LoadMenuPrefs();
             if (showDifficultyMenu)
                 menu = MenuMode.Start;     // Easy / Medium / Hard — see GreyboxGame.Menu
             else
@@ -1019,7 +1020,7 @@ namespace MahjongNight.Game
             {
                 (difficulty.HasValue ? $"{DifficultyName(difficulty.Value)} · " : "") +
                 (tables.Count > 1 ? $"Table {ctx.Index + 1}/{tables.Count} · " : "") +
-                $"Hand {match.HandNumber}/{matchRules.HandsPerMatch} · {(PureMahjong || classicRules ? "Classic" : "Party")} · {match.PrevailingWind} round · Wall {Hand.Wall.DrawableCount}",
+                $"Hand {match.HandNumber}/{matchRules.HandsPerMatch} · {(PureMahjong || classicRules ? "Classic" : "Party")} · {rules.HandSize} tiles · {match.PrevailingWind} round · Wall {Hand.Wall.DrawableCount}",
                 HandLive ? $"Turn: {SeatName(Hand.CurrentSeat)}" : Shuffling ? "Shuffling the tiles…" : "Hand over",
                 ScoresLine(),
             };
@@ -1316,7 +1317,7 @@ namespace MahjongNight.Game
         private string ReadyHint()
         {
             SeatState me = Hand.Seats[HumanSeat];
-            if (me.Concealed.Count + 3 * me.Melds.Count != 13)
+            if (me.Concealed.Count + 3 * me.Melds.Count != rules.HandSize)
                 return null;
             List<Tile> waits = FaanCalculator.GetWaits(me.Concealed, me.Melds, rules);
             if (waits.Count == 0)

@@ -42,22 +42,23 @@ namespace MahjongNight.Core
         }
 
         public Tile Pair { get; }
-        /// <summary>Exactly four sets: declared melds first, then concealed sets.</summary>
+        /// <summary>All the sets (four, or five in 16-tile mahjong): declared melds first, then concealed sets.</summary>
         public IReadOnlyList<TileGroup> Groups { get; }
 
         public override string ToString() => string.Join(" ", Groups) + $" + pair {Pair}";
     }
 
-    /// <summary>Finds every way to split a hand into four sets plus a pair.</summary>
+    /// <summary>Finds every way to split a hand into sets plus a pair (four sets, or five for 16-tile mahjong).</summary>
     public static class HandDecomposer
     {
         /// <param name="concealed">Concealed tiles including the winning tile.</param>
         /// <param name="melds">Declared melds.</param>
+        /// <param name="sets">Sets in a winning hand besides the pair (4, or 5 for 16-tile hands).</param>
         /// <returns>All decompositions; empty if the hand is not a standard winning shape.</returns>
-        public static List<HandDecomposition> Decompose(IReadOnlyList<Tile> concealed, IReadOnlyList<Meld> melds)
+        public static List<HandDecomposition> Decompose(IReadOnlyList<Tile> concealed, IReadOnlyList<Meld> melds, int sets = 4)
         {
             var results = new List<HandDecomposition>();
-            int setsNeeded = 4 - melds.Count;
+            int setsNeeded = sets - melds.Count;
             if (setsNeeded < 0 || concealed.Count != setsNeeded * 3 + 2)
                 return results;
 

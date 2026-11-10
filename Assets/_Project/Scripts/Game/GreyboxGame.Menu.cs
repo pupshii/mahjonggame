@@ -28,6 +28,23 @@ namespace MahjongNight.Game
         private Difficulty? pendingDifficulty;   // chosen in the menu; applied on the next Update
         private string startError;               // why the last start failed, shown on the menu
 
+        private const string SixteenTilesPref = "SixteenTiles";
+        /// <summary>16-tile mahjong (16 in hand, five sets + a pair to win) rather than 13. Remembered between runs.</summary>
+        private bool sixteenTiles = true;
+
+        private void LoadMenuPrefs()
+        {
+            try { sixteenTiles = PlayerPrefs.GetInt(SixteenTilesPref, 1) == 1; }
+            catch (System.Exception) { sixteenTiles = true; }
+        }
+
+        private void ToggleSixteenTiles()
+        {
+            sixteenTiles = !sixteenTiles;
+            try { PlayerPrefs.SetInt(SixteenTilesPref, sixteenTiles ? 1 : 0); PlayerPrefs.Save(); }
+            catch (System.Exception) { }
+        }
+
         private static readonly Difficulty[] Difficulties = { Difficulty.Easy, Difficulty.Medium, Difficulty.Hard, Difficulty.Mahjong };
 
         public static int TablesFor(Difficulty d) => d == Difficulty.Easy || d == Difficulty.Mahjong ? 1 : d == Difficulty.Medium ? 3 : 5;
@@ -60,6 +77,7 @@ namespace MahjongNight.Game
             difficulty = d;
             rules = PureMahjong || classicRules ? RuleSet.Classic() : RuleSet.Party();
             rules.ChooseDraws = chooseDraws && !PureMahjong;
+            rules.HandSets = sixteenTiles ? 5 : 4;   // 16-tile hands (five sets + a pair) or 13 (four sets)
             TearDownStage();
             BuildTables();
             headLook = new HeadLook(cam, avatars[HumanSeat].EyePosition, ctx.Origin);
@@ -156,7 +174,7 @@ namespace MahjongNight.Game
 
             float w = Mathf.Min(Screen.width - Pad * 4, Unit * 34);
             float x = (Screen.width - w) / 2f;
-            float y = Screen.height * (menu == MenuMode.Start ? 0.16f : 0.2f);
+            float y = Screen.height * (TouchUI ? 0.05f : menu == MenuMode.Start ? 0.12f : 0.16f);
             var big = new GUIStyle(titleStyle) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(Unit * 3.2f) };
             var mid = new GUIStyle(textStyle) { alignment = TextAnchor.MiddleCenter, wordWrap = true };
 
@@ -184,6 +202,20 @@ namespace MahjongNight.Game
                 GUI.Label(new Rect(x, y, w, LineHeight), "Restart on a difficulty (every table and your bars start over):", centerStyle);
                 y += LineHeight * 1.4f;
             }
+
+            // Hand size: 16 tiles (five sets + a pair) or 13 (four sets + a pair).
+            string handText = sixteenTiles
+                ? "<b>Hand: 16 tiles</b> (五組一對 — five sets + a pair)   ·   tap for 13"
+                : "<b>Hand: 13 tiles</b> (四組一對 — four sets + a pair)   ·   tap for 16";
+            if (menu == MenuMode.Pause && tables.Count > 0 && rules.HandSize != (sixteenTiles ? 16 : 13))
+                handText += "\n<size=" + Mathf.RoundToInt(textStyle.fontSize * 0.85f) + ">(starts with your next restart below)</size>";
+            float hh = menu == MenuMode.Pause && tables.Count > 0 && rules.HandSize != (sixteenTiles ? 16 : 13) ? Unit * 3.6f : Unit * 2.4f;
+            if (GUI.Button(new Rect(x, y, w, hh), handText, buttonStyle))
+            {
+                ToggleSixteenTiles();
+                GUIUtility.ExitGUI();
+            }
+            y += hh + LineHeight * 0.6f;
 
             for (int i = 0; i < Difficulties.Length; i++)
             {

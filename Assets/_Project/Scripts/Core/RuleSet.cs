@@ -24,6 +24,16 @@ namespace MahjongNight.Core
         /// <summary>Faan cap (爆棚); limit hands score exactly this.</summary>
         public int MaxFaan { get; set; } = 13;
 
+        /// <summary>
+        /// Sets in a winning hand besides the pair: 4 = Hong Kong style (13 tiles in hand, 14 to
+        /// win); 5 = 16-tile style, as in Taiwanese mahjong (16 in hand, 17 to win). Seven Pairs
+        /// and Thirteen Orphans only exist with 4.
+        /// </summary>
+        public int HandSets { get; set; } = 4;
+
+        /// <summary>Tiles in hand between turns: 13 (4 sets) or 16 (5 sets).</summary>
+        public int HandSize => HandSets * 3 + 1;
+
         /// <summary>Allow Seven Pairs (七對) as a winning shape.</summary>
         public bool AllowSevenPairs { get; set; }
 

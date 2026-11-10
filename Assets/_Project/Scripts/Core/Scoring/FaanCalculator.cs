@@ -37,7 +37,7 @@ namespace MahjongNight.Core
             if (rules.AllowSevenPairs && ctx.Melds.Count == 0 && IsSevenPairs(ctx.Concealed))
                 Consider(Score(ctx, rules, HandShape.SevenPairs, null));
 
-            foreach (HandDecomposition d in HandDecomposer.Decompose(ctx.Concealed, ctx.Melds))
+            foreach (HandDecomposition d in HandDecomposer.Decompose(ctx.Concealed, ctx.Melds, rules.HandSets))
                 Consider(Score(ctx, rules, HandShape.Standard, d));
 
             return best;
@@ -50,7 +50,7 @@ namespace MahjongNight.Core
                 return true;
             if (rules.AllowSevenPairs && melds.Count == 0 && IsSevenPairs(concealed))
                 return true;
-            return HandDecomposer.Decompose(concealed, melds).Count > 0;
+            return HandDecomposer.Decompose(concealed, melds, rules.HandSets).Count > 0;
         }
 
         /// <summary>
@@ -206,9 +206,9 @@ namespace MahjongNight.Core
                 add(FaanPattern.AllChows, 1);
             if (groups.All(g => g.IsPungOrKong))
                 add(FaanPattern.AllPungs, 1);
-            if (groups.Count(g => g.Type == MeldType.Kong) == 4)
+            if (groups.Count(g => g.Type == MeldType.Kong) >= 4)
                 add(FaanPattern.FourKongs, 1);
-            if (CountConcealedPungs(ctx, d) == 4)
+            if (CountConcealedPungs(ctx, d) >= 4)
                 add(FaanPattern.FourConcealedPungs, 1);
 
             // Tiles

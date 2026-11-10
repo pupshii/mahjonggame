@@ -38,8 +38,8 @@ namespace MahjongNight.Core
             int size = me.Concealed.Count + 3 * me.Melds.Count;
             var distinct = new HashSet<Tile>(me.Concealed);
 
-            // On our own turn with 14 tiles: look for a swap that wins outright.
-            if (size == 14 && hand.Phase == HandPhase.AwaitingAction && hand.CurrentSeat == seat)
+            // On our own turn holding the extra tile: look for a swap that wins outright.
+            if (size == hand.Rules.HandSize + 1 && hand.Phase == HandPhase.AwaitingAction && hand.CurrentSeat == seat)
             {
                 WinContext baseCtx = hand.PreviewWin(seat);
                 if (baseCtx == null)
@@ -63,8 +63,8 @@ namespace MahjongNight.Core
                 return null;
             }
 
-            // Between turns with 13 tiles: turn a non-ready hand into a ready one.
-            if (size == 13 && FaanCalculator.GetWaits(me.Concealed, me.Melds, hand.Rules).Count == 0)
+            // Between turns: turn a non-ready hand into a ready one.
+            if (size == hand.Rules.HandSize && FaanCalculator.GetWaits(me.Concealed, me.Melds, hand.Rules).Count == 0)
             {
                 CheatPlan? best = null;
                 int bestWaits = 0;

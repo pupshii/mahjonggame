@@ -18,6 +18,7 @@ namespace MahjongNight.Core
     public sealed class HandState
     {
         public const int SeatCount = 4;
+        /// <summary>Tiles in hand for Hong Kong rules; see <see cref="RuleSet.HandSize"/> for the table's actual size.</summary>
         public const int StartingHandSize = 13;
 
         private readonly IWinValidator winValidator;
@@ -724,17 +725,19 @@ namespace MahjongNight.Core
 
         private void DealStartingHands()
         {
-            // Real dealing pattern: three passes of 4 tiles, one pass of 1 tile, then the
-            // dealer takes a 14th. Starts with the dealer, in turn order.
-            for (int pass = 0; pass < 4; pass++)
+            // Real dealing pattern: passes of 4 tiles (then whatever's left: 1 for a 13-tile
+            // hand, none for 16), then the dealer takes one more. Starts with the dealer.
+            int size = Rules.HandSize;
+            for (int dealt = 0; dealt < size; )
             {
-                int count = pass < 3 ? 4 : 1;
+                int count = Math.Min(4, size - dealt);
                 for (int i = 0; i < SeatCount; i++)
                 {
                     int seat = (Dealer + i) % SeatCount;
                     for (int k = 0; k < count; k++)
                         seats[seat].concealed.Add(Wall.DrawFront());
                 }
+                dealt += count;
             }
             seats[Dealer].concealed.Add(Wall.DrawFront());
         }

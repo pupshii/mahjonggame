@@ -23,7 +23,8 @@ namespace MahjongNight.Game
         private const float WashRadius = 0.42f;
         private const float WallDistance = 0.3f;
         private const int StacksPerSide = 18;
-        private const int DealtTiles = 53;           // 13 each and one more for the dealer
+        private readonly int handSize;               // 13, or 16 for 16-tile mahjong
+        private int DealtTiles => handSize * 4 + 1;  // a hand each and one more for the dealer
 
         private readonly Vector3 origin;
         private readonly Transform root;
@@ -40,8 +41,9 @@ namespace MahjongNight.Game
             public float FromScale;
         }
 
-        public ShuffleView(Transform parent, TileFactory factory, Vector3 origin, int seed)
+        public ShuffleView(Transform parent, TileFactory factory, Vector3 origin, int seed, int handSize = 13)
         {
+            this.handSize = handSize;
             this.origin = origin;
             rng = new System.Random(seed);
             root = new GameObject("Shuffle").transform;
@@ -203,7 +205,7 @@ namespace MahjongNight.Game
                 float delay = i / (float)DealtTiles * (DealSeconds - 0.3f);
                 float t = Mathf.Clamp01((stageTime - delay) / 0.3f);
                 Quaternion frame = Quaternion.Euler(0f, -90f * seat, 0f);
-                Vector3 to = origin + frame * new Vector3(((i % 13) - 6) * 0.045f, 0.03f, -0.74f);
+                Vector3 to = origin + frame * new Vector3(((i % handSize) - handSize / 2) * 0.045f, 0.03f, -0.74f);
                 Vector3 p = Vector3.Lerp(tiles[i].From, to, Mathf.SmoothStep(0f, 1f, t));
                 p.y += Mathf.Sin(t * Mathf.PI) * 0.05f;
                 Place(i, p, tiles[i].Yaw, Mathf.Lerp(tiles[i].FromScale, 0f, t * t));

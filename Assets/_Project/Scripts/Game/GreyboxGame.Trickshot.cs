@@ -31,7 +31,7 @@ namespace MahjongNight.Game
         private bool ComputeReady(int seat)
         {
             SeatState st = Hand.Seats[seat];
-            if (st.Concealed.Count + 3 * st.Melds.Count != 13)
+            if (st.Concealed.Count + 3 * st.Melds.Count != rules.HandSize)
                 return false;
             return FaanCalculator.GetWaits(st.Concealed, st.Melds, rules).Count > 0;
         }
@@ -44,8 +44,8 @@ namespace MahjongNight.Game
             for (int s = 0; s < HandState.SeatCount; s++)
             {
                 SeatState st = Hand.Seats[s];
-                if (st.Concealed.Count + 3 * st.Melds.Count != 13)
-                    continue;                                   // mid-turn (14 tiles): judge after the discard
+                if (st.Concealed.Count + 3 * st.Melds.Count != rules.HandSize)
+                    continue;                                   // mid-turn (holding the extra tile): judge after the discard
                 ctx.Ready[s] = ComputeReady(s);
                 if (!ctx.Ready[s] && match.TrickshotMultiplier(s) > 1)
                 {
@@ -81,7 +81,7 @@ namespace MahjongNight.Game
             }
             if (!ctx.Ready[HumanSeat] || !ComputeReady(HumanSeat))
             {
-                ShowToast(Hand.Seats[HumanSeat].Concealed.Count + 3 * Hand.Seats[HumanSeat].Melds.Count == 14
+                ShowToast(Hand.Seats[HumanSeat].Concealed.Count + 3 * Hand.Seats[HumanSeat].Melds.Count == rules.HandSize + 1
                     ? "Discard first — then stack your ready hand."
                     : "Trickshots are only for a ready hand (one tile from winning).");
                 return;
