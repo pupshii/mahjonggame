@@ -137,10 +137,12 @@ namespace MahjongNight.Game
                 PlaySound(beat % 4 == 0 ? accentClip : tickClip, 0.35f);
             }
 
-            bool boom = Input.GetKeyDown(KeyCode.J) || Input.GetMouseButtonDown(0);
-            bool tak = Input.GetKeyDown(KeyCode.K) || Input.GetMouseButtonDown(1);
+            bool boom = Input.GetKeyDown(KeyCode.J) || (!TouchUI && Input.GetMouseButtonDown(0));
+            bool tak = Input.GetKeyDown(KeyCode.K) || (!TouchUI && Input.GetMouseButtonDown(1));
             if (boom) DrumHitPressed(DrumHit.Boom);
             if (tak) DrumHitPressed(DrumHit.Tak);
+            foreach (Vector2 tap in touchTaps)     // touch: left half of the screen = red, right half = blue
+                DrumHitPressed(tap.x < Screen.width / 2f ? DrumHit.Boom : DrumHit.Tak);
 
             if (drum.Finished)
             {
@@ -319,7 +321,9 @@ namespace MahjongNight.Game
         {
             PhoneHeader("Drum Rush");
             var c = phoneCanvas;
-            c.Label(0.05f, 0.14f, 0.9f, 0.1f, "<color=#f66>Red</color>: J / left click   <color=#6af>Blue</color>: K / right click", c.Text);
+            c.Label(0.05f, 0.14f, 0.9f, 0.1f, TouchUI
+                ? "<color=#f66>Red</color>: tap the left half   <color=#6af>Blue</color>: tap the right half"
+                : "<color=#f66>Red</color>: J / left click   <color=#6af>Blue</color>: K / right click", c.Text);
             float y = 0.27f;
             for (int i = 0; i < setlist.Count; i++)
             {
@@ -407,7 +411,8 @@ namespace MahjongNight.Game
             c.Fill(0.03f, 0.9f, 0.94f, 0.025f, new Color(0.25f, 0.25f, 0.28f));
             c.Fill(0.03f, 0.9f, 0.94f * Mathf.Clamp01((float)(g.Time / g.Song.Length)), 0.025f, new Color(1f, 0.6f, 0.3f));
             c.Label(0.03f, 0.74f, 0.94f, 0.12f,
-                $"<color=#f66>RED</color> J / left click     <color=#6af>BLUE</color> K / right click     combo {g.Combo} · max {g.MaxCombo}", c.Text);
+                (TouchUI ? "<color=#f66>RED</color> tap left half     <color=#6af>BLUE</color> tap right half"
+                         : "<color=#f66>RED</color> J / left click     <color=#6af>BLUE</color> K / right click") + $"     combo {g.Combo} · max {g.MaxCombo}", c.Text);
             if (humanPhone != null)
             {
                 c.Fill(0f, 0f, 1f, 1f, new Color(0f, 0f, 0f, 0.55f));

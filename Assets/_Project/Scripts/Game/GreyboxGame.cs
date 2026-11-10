@@ -102,6 +102,7 @@ namespace MahjongNight.Game
             SetUpCameraAndLight();
             SetUpSounds();
             SetUpShuffleSounds();
+            SetUpTouch();
             if (showDifficultyMenu)
                 menu = MenuMode.Start;     // Easy / Medium / Hard — see GreyboxGame.Menu
             else
@@ -185,6 +186,8 @@ namespace MahjongNight.Game
 
             loggedHandEvents = 0;
             ResetTrickshots();
+            if (ctx == Seated)
+                touchLookDown = false;   // a new hand: sit up straight
             resultLines = new List<string>();
             paymentLines.Clear();
             FlushMatchEvents();
@@ -201,6 +204,7 @@ namespace MahjongNight.Game
 
         private void Update()
         {
+            UpdateTouch();                       // on-screen buttons and fingers (phones / tablets)
             if (UpdateMenu())
                 return;
             if (tables.Count == 0 || Seated.Match == null)
@@ -237,7 +241,7 @@ namespace MahjongNight.Game
         private void UpdateHumanHead(float dt)
         {
             bool overUi = uiRects.Any(r => r.Contains(mouseGui));
-            bool tableView = (rightMouseHeld || tabHeld) && !OnPhone(HumanSeat);
+            bool tableView = (rightMouseHeld || tabHeld || touchTableView) && !OnPhone(HumanSeat);
             headLook.SetTableView(tableView);
             if (OnPhone(HumanSeat) && humanAlive)
                 headLook.AimAt(0f, HeadLook.BasePitch + 45f); // eyes on your phone, like it or not
@@ -245,6 +249,8 @@ namespace MahjongNight.Game
                 headLook.AimNeutral();
             else if (hasMouse && !overUi && !PickerOpen && tableView)
                 headLook.AimTableView(mouseGui, Screen.width, Screen.height);
+            else if (TouchUI)   // touch: where you've dragged to (or the Look down button)
+                headLook.AimAt(touchYaw, touchLookDown ? HeadLook.LookingDownPitch + 6f : HeadLook.BasePitch + touchPitch);
             else if (hasMouse && !overUi && !PickerOpen)
                 headLook.AimFromCursor(mouseGui, Screen.width, Screen.height);
             headLook.Tick(dt);
@@ -342,6 +348,7 @@ namespace MahjongNight.Game
         {
             FlushHandEvents();
             hoveredTile = null;
+            touchSelectedTile = null;
             ctx.ClockUsed = 0f;            // a fresh wait (if the table now waits on you)
             ctx.WaitingSince = Time.time;
             float delay = Hand.Phase == HandPhase.AwaitingAction ? botTurnDelay
@@ -840,14 +847,19 @@ namespace MahjongNight.Game
 
             if (!standing && e.type == EventType.MouseDown && e.button == 0 && !uiRects.Any(r => r.Contains(e.mousePosition)))
             {
-                if (hoveredTile != null)
+                if (hoveredTile != null && TouchUI && touchSelectedTile != hoveredTile)
                 {
-                    Tile tile = hoveredTile.Tile;
+                    touchSelectedTile = hoveredTile;      // touch: first tap picks the tile...
+                    e.Use();
+                }
+                else if (hoveredTile != null)
+                {
+                    Tile tile = hoveredTile.Tile;         // ...the second tap (or a click) discards it
                     e.Use();
                     Apply(PlayerAction.Discard(HumanSeat, tile));
                     GUIUtility.ExitGUI();
                 }
-                else if (hoveredAvatar >= 0 && HandLive && !headLook.InTableView)
+                else if (hoveredAvatar >= 0 && HandLive && !headLook.InTableView && !TouchUI)
                 {
                     int target = hoveredAvatar;
                     e.Use();
@@ -893,6 +905,7 @@ namespace MahjongNight.Game
             float overviewBottom = DrawTablesOverview();
             DrawKitchenCard(overviewBottom + 8);
             DrawPhone();
+            DrawTouchControls();
             DrawMiniGame();
             DrawToast();
             DrawPhoneOverlay();
@@ -938,7 +951,7 @@ namespace MahjongNight.Game
             if (boxStyle != null && Mathf.Approximately(stylesForHeight, Screen.height))
                 return;
             stylesForHeight = Screen.height;
-            int size = Mathf.Max(12, Mathf.RoundToInt(Screen.height / 55f));
+            int size = Mathf.Max(12, Mathf.RoundToInt(Screen.height / UiDivisor));
 
             boxStyle = new GUIStyle(GUI.skin.box);
             textStyle = new GUIStyle(GUI.skin.label) { fontSize = size, wordWrap = false, richText = true, clipping = TextClipping.Clip };
@@ -958,7 +971,7 @@ namespace MahjongNight.Game
             };
         }
 
-        private float Unit => Screen.height / 55f;
+        private float Unit => Screen.height / UiDivisor;
         private float LineHeight => Unit * 1.45f;
         private const float Pad = 10f;
 
@@ -1088,6 +1101,7 @@ namespace MahjongNight.Game
                 return;
             string text = Time.time < callOutCooldownUntil
                 ? "Catch your breath before calling out again…"
+                : TouchUI ? $"Watching {SeatName(target)} — tap Call out! to call out cheating (出千!)"
                 : $"Watching {SeatName(target)} — press SPACE or click them to call out cheating (出千!)";
             float w = TextWidth(centerStyle, text) + Pad * 2;
             var r = new Rect(Screen.width - w - Pad, Pad, w, LineHeight + Pad);
@@ -1238,11 +1252,13 @@ namespace MahjongNight.Game
 
             string message;
             if (legal.Count == 0)
-                message = $"Waiting for {SeatName(Hand.CurrentSeat)}…   (push the cursor to the screen edges to look around)";
+                message = $"Waiting for {SeatName(Hand.CurrentSeat)}…   " + (TouchUI ? "(drag to look around)" : "(push the cursor to the screen edges to look around)");
             else if (Hand.Phase == HandPhase.AwaitingDraw)
                 message = "Your turn — pick the tile you want to draw";
             else if (Hand.Phase == HandPhase.AwaitingAction)
-                message = "Your turn — click a tile in your hand to discard it";
+                message = TouchUI
+                    ? (touchSelectedTile != null ? "Tap the raised tile again to discard it" : "Your turn — tap a tile, then tap it again to discard it")
+                    : "Your turn — click a tile in your hand to discard it";
             else if (Hand.Phase == HandPhase.AwaitingRobKong)
                 message = $"{SeatName(Hand.CurrentSeat)} is adding to a kong";
             else

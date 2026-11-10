@@ -101,7 +101,7 @@ namespace MahjongNight.Game
                 StartStage(d);
                 return true;
             }
-            if (Input.GetKeyDown(KeyCode.Escape) && tables.Count > 0)
+            if (KeyDown(KeyCode.Escape) && tables.Count > 0)
             {
                 if (menu == MenuMode.None)
                 {

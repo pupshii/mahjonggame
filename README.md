@@ -22,6 +22,30 @@ git clone https://github.com/pupshii/mahjonggame.git
 4. Check **Edit → Project Settings → Editor**: *Asset Serialization* = **Force Text**
    (the default) so scenes and prefabs can be merged.
 
+## Playing on an iPhone (touch controls)
+Touch controls switch on by themselves on a phone or tablet (to try them in the editor, set
+**Touch Controls = Always** on the Greybox Game component — the mouse then acts as one finger).
+- **Seated:** drag to look around, pinch to zoom; **tap a tile to pick it, tap it again to discard**.
+  Buttons on the right: Stand up, Phone, Table view, Look down (to cheat), Call out!, Trickshot.
+  The **II Menu** button at the top pauses.
+- **Standing:** joystick bottom-left (push it all the way to run), drag on the right to look,
+  **Use** / **Sit** buttons.
+- **Drum Rush:** tap the left half of the screen for red, the right half for blue.
+- Everything else (mini-games, shuffling, the phone, menus) works by tapping and dragging.
+
+**Building for iPhone** (on your Mac):
+1. Unity Hub → **Installs** → your Unity 6 version → ⚙ → **Add modules** → tick **iOS Build
+   Support** → Install. Install **Xcode** from the Mac App Store too.
+2. In Unity: **Mahjong Night → iOS → 1. Set Up for iPhone** (switches the platform to iOS and sets
+   landscape / full screen / bundle id `com.pupshii.mahjongnight`). Commit the changed
+   `ProjectSettings/` files.
+3. **Mahjong Night → iOS → 2. Build Xcode Project** → it builds into `Builds/iOS` and opens it.
+4. Open `Unity-iPhone.xcodeproj` in Xcode → **Signing & Capabilities** → Team: your Apple ID →
+   plug in the iPhone, select it at the top, press **▶ Run**. First time on the phone: Settings →
+   General → VPN & Device Management → trust your Apple ID, and turn on Settings → Privacy &
+   Security → **Developer Mode**. (With a free Apple ID the app expires after 7 days; just run it
+   from Xcode again.)
+
 ## Playing the greybox
 1. Menu bar → **Mahjong Night → Create Greybox Scene** (first time only; commit the scene).
    Later: **Mahjong Night → Open Greybox Scene**. Press **Play** and pick a difficulty:

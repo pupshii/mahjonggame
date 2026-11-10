@@ -126,7 +126,7 @@ namespace MahjongNight.Game
             // app where the number keys pick things (songs, apps).
             if (humanAlive && !PureMahjong)
             {
-                if (Input.GetKeyDown(KeyCode.P))
+                if (KeyDown(KeyCode.P))
                     TogglePhone();
                 if (phonePanelOpen && phoneApp != PhoneApp.Calls)
                     HandlePhoneKeys();

@@ -21,6 +21,13 @@ namespace MahjongNight.Game
         private Vector3 feet;
         private float yaw, pitch;
 
+        /// <summary>Touch joystick (-1..1; x = strafe, y = forward). Pushed all the way = sprint.</summary>
+        public Vector2 TouchMove { get; set; }
+        /// <summary>Touch look this frame, in degrees (x = turn right, y = look up). Used up by <see cref="Tick"/>.</summary>
+        public Vector2 TouchLook { get; set; }
+        /// <summary>Turn with the mouse (off with touch controls).</summary>
+        public bool UseMouse { get; set; } = true;
+
         public Walker(RoomView room)
         {
             this.room = room;
@@ -40,18 +47,25 @@ namespace MahjongNight.Game
         /// <summary>Reads input and moves. Returns how hard you're exerting yourself (for hunger/thirst).</summary>
         public Exertion Tick(float dt, bool canMove)
         {
+            Vector2 touchLook = TouchLook;
+            TouchLook = Vector2.zero;
             if (!canMove)
                 return Exertion.Resting;
 
-            yaw += Input.GetAxis("Mouse X") * MouseSensitivity;
-            pitch = Mathf.Clamp(pitch - Input.GetAxis("Mouse Y") * MouseSensitivity, -80f, 85f);
+            if (UseMouse)
+            {
+                yaw += Input.GetAxis("Mouse X") * MouseSensitivity;
+                pitch = Mathf.Clamp(pitch - Input.GetAxis("Mouse Y") * MouseSensitivity, -80f, 85f);
+            }
+            yaw += touchLook.x;
+            pitch = Mathf.Clamp(pitch - touchLook.y, -80f, 85f);
 
-            float forward = (Input.GetKey(KeyCode.W) ? 1f : 0f) - (Input.GetKey(KeyCode.S) ? 1f : 0f);
-            float strafe = (Input.GetKey(KeyCode.D) ? 1f : 0f) - (Input.GetKey(KeyCode.A) ? 1f : 0f);
-            if (forward == 0f && strafe == 0f)
+            float forward = Mathf.Clamp((Input.GetKey(KeyCode.W) ? 1f : 0f) - (Input.GetKey(KeyCode.S) ? 1f : 0f) + TouchMove.y, -1f, 1f);
+            float strafe = Mathf.Clamp((Input.GetKey(KeyCode.D) ? 1f : 0f) - (Input.GetKey(KeyCode.A) ? 1f : 0f) + TouchMove.x, -1f, 1f);
+            if (Mathf.Abs(forward) < 0.05f && Mathf.Abs(strafe) < 0.05f)
                 return Exertion.Resting;
 
-            bool sprint = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            bool sprint = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift) || TouchMove.magnitude > 0.92f;
             float rad = yaw * Mathf.Deg2Rad;
             var fwd = new Vector3(Mathf.Sin(rad), 0f, Mathf.Cos(rad));
             var right = new Vector3(Mathf.Cos(rad), 0f, -Mathf.Sin(rad));

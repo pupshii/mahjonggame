@@ -55,13 +55,13 @@ namespace MahjongNight.Game
             UpdateHumanPhone(now);
             UpdateDrums(dt);
             UpdateMiniGame(dt);
-            if (!standing && humanAlive && !PureMahjong && Input.GetKeyDown(KeyCode.T))
+            if (!standing && humanAlive && !PureMahjong && KeyDown(KeyCode.T))
                 TryHumanTrickshot();
 
             // Standing captures the mouse for looking around — but release it whenever there's
             // something on screen to click (phone, call panel, popup, results/shop).
             bool needsCursor = standing && CursorNeeded;
-            if (standing)
+            if (standing && !TouchUI)
             {
                 Cursor.lockState = needsCursor ? CursorLockMode.None : CursorLockMode.Locked;
                 Cursor.visible = needsCursor;
@@ -84,7 +84,7 @@ namespace MahjongNight.Game
             {
                 walker.ApplyTo(cam);
                 UpdateInteractables(now);
-                if (Input.GetKeyDown(KeyCode.E) && !using_.HasValue && !OnPhone(HumanSeat) && !InMiniGame)
+                if (KeyDown(KeyCode.E) && !using_.HasValue && !OnPhone(HumanSeat) && !InMiniGame)
                 {
                     if (lookingAtInteractable != null)
                         Use(lookingAtInteractable, now);
@@ -92,10 +92,10 @@ namespace MahjongNight.Game
                         Serve(lookingAtCustomer);
                 }
                 int chair = NearestChair();
-                if (Input.GetKeyDown(KeyCode.F) && chair >= 0 && !using_.HasValue && !InMiniGame)
+                if (KeyDown(KeyCode.F) && chair >= 0 && !using_.HasValue && !InMiniGame)
                     SitDown(chair);
             }
-            else if (humanAlive && !PureMahjong && Input.GetKeyDown(KeyCode.F) && !OnPhone(HumanSeat)
+            else if (humanAlive && !PureMahjong && KeyDown(KeyCode.F) && !OnPhone(HumanSeat)
                      && (cheats[HumanSeat] == null || !cheats[HumanSeat].InProgress))
             {
                 StandUp();
@@ -106,8 +106,11 @@ namespace MahjongNight.Game
         {
             standing = true;
             walker.Place(RoomView.StandUpPoint(Seated.Origin), 180f); // facing away from the table
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
+            if (!TouchUI)
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
             hoveredTile = null;
             AddLog("You get up from the table.");
         }
@@ -316,8 +319,8 @@ namespace MahjongNight.Game
             }
 
             string help = atHome
-                ? "You're home. Your turn clocks keep running at the club.   WASD move · Shift sprint · E use · door: back to the club"
-                : "One table's turn clock runs at a time — the one that's waited longest.   WASD move · Shift sprint · E use · F sit (behind your chair)";
+                ? "You're home. Your turn clocks keep running at the club.   " + (TouchUI ? "Stick: move (all the way = run) · drag: look · Use" : "WASD move · Shift sprint · E use · door: back to the club")
+                : "One table's turn clock runs at a time — the one that's waited longest.   " + (TouchUI ? "Stick: move (all the way = run) · drag: look · Use · Sit (behind your chair)" : "WASD move · Shift sprint · E use · F sit (behind your chair)");
             float hw = TextWidth(logStyle, help) + Pad * 2;
             var hr = new Rect((Screen.width - hw) / 2f, Screen.height - LineHeight - Pad * 2, hw, LineHeight + Pad);
             GUI.Box(hr, GUIContent.none, boxStyle);
