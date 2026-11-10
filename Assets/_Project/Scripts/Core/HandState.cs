@@ -31,6 +31,7 @@ namespace MahjongNight.Core
         private int discardCount;
         private bool mustDiscardOnly;          // after claiming a chow/pung
         private bool lastDrawWasKongReplacement;
+        private bool lastDrawWasFlowerReplacement;
         private bool pendingKongReplacement;   // during AwaitingDraw: this draw replaces a kong
         private Tile pendingKongTile;          // during AwaitingRobKong
 
@@ -383,6 +384,7 @@ namespace MahjongNight.Core
                 Melds = s.melds.ToArray(),
                 Bonus = s.bonus.ToArray(),
                 LastTile = !CanDrawAny(),
+                DiscardsBeforeWin = s.Discards.Count,
             };
         }
 
@@ -393,6 +395,7 @@ namespace MahjongNight.Core
             c.WinningTile = LastDrawnTile ?? default;
             c.SelfDrawn = true;
             c.KongReplacement = lastDrawWasKongReplacement;
+            c.FlowerReplacement = lastDrawWasFlowerReplacement;
             c.HeavenlyHand = seat == Dealer && discardCount == 0 && NoMeldsDeclared();
             return c;
         }
@@ -478,6 +481,7 @@ namespace MahjongNight.Core
                 seats[seat].concealed.Add(kind);
                 LastDrawnTile = kind;
                 lastDrawWasKongReplacement = pendingKongReplacement;
+                lastDrawWasFlowerReplacement = false;
                 events.Add(new TileDrawnEvent(seat, kind, fromBack: pendingKongReplacement));
                 Phase = HandPhase.AwaitingAction;
             }
@@ -647,6 +651,7 @@ namespace MahjongNight.Core
             CurrentSeat = seat;
             LastDrawnTile = null;
             lastDrawWasKongReplacement = false;
+            lastDrawWasFlowerReplacement = false;
             mustDiscardOnly = true;
             Phase = HandPhase.AwaitingAction;
         }
@@ -680,6 +685,7 @@ namespace MahjongNight.Core
         /// <summary>Draws one playable tile, setting aside bonus tiles. False if the wall ran out (hand ended).</summary>
         private bool DrawInto(int seat, bool fromBack)
         {
+            lastDrawWasFlowerReplacement = false;
             while (true)
             {
                 if (!Wall.CanDraw)
@@ -696,6 +702,7 @@ namespace MahjongNight.Core
                     seats[seat].bonus.Add(tile);
                     events.Add(new BonusTileRevealedEvent(seat, tile));
                     fromBack = true;
+                    lastDrawWasFlowerReplacement = true;   // the next tile replaces a flower
                     continue;
                 }
 

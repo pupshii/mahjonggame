@@ -4,8 +4,23 @@ namespace MahjongNight.Core
     /// Table rules that vary between groups. All house-rule variation belongs here
     /// rather than in scattered if-statements. Grows as milestones add rules.
     /// </summary>
+    /// <summary>Which scoring sheet the table uses.</summary>
+    public enum ScoringStyle : byte
+    {
+        /// <summary>Hong Kong faan (<see cref="FaanTable"/>), with a cap (<see cref="RuleSet.MaxFaan"/>).</summary>
+        HongKong,
+        /// <summary>HK-style Taiwanese fan for 16-tile hands (<see cref="TaiwaneseScorer"/>): add up every hand that applies, no cap.</summary>
+        Taiwanese,
+    }
+
     public sealed class RuleSet
     {
+        /// <summary>The scoring sheet. Taiwanese is meant for 16-tile hands (<see cref="HandSets"/> = 5).</summary>
+        public ScoringStyle Scoring { get; set; } = ScoringStyle.HongKong;
+
+        /// <summary>Fan for each Taiwanese hand (house values can be changed here).</summary>
+        public TaiwaneseTable Taiwanese { get; set; } = TaiwaneseTable.Default();
+
         /// <summary>
         /// Tiles at the back of the wall that are never drawn; the hand is a draw game when
         /// only these remain. 0 = play until the wall is empty.

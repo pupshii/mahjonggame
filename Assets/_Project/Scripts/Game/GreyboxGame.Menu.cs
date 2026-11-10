@@ -80,9 +80,11 @@ namespace MahjongNight.Game
             rules.HandSets = sixteenTiles ? 5 : 4;   // 16-tile hands (five sets + a pair) or 13 (four sets)
             if (sixteenTiles)
             {
-                // As in Taiwanese mahjong: any complete hand wins, and every win pays a base on top.
+                // HK-style Taiwanese: any complete hand wins, scored off the Taiwanese sheet
+                // (add up every hand that applies, no cap; a 1-fan win off a discard is a Chicken Hand, 10).
+                rules.Scoring = ScoringStyle.Taiwanese;
                 rules.MinFaan = 0;
-                rules.WinBase = 1;
+                rules.WinBase = 0;
             }
             TearDownStage();
             BuildTables();
@@ -211,8 +213,8 @@ namespace MahjongNight.Game
 
             // Hand size: 16 tiles (five sets + a pair) or 13 (four sets + a pair).
             string handText = sixteenTiles
-                ? "<b>Hand: 16 tiles</b> (五組一對 — five sets + a pair)   ·   tap for 13"
-                : "<b>Hand: 13 tiles</b> (四組一對 — four sets + a pair)   ·   tap for 16";
+                ? "<b>16 tiles · HK-style Taiwanese scoring</b> (five sets + a pair)   ·   tap for 13"
+                : "<b>13 tiles · Hong Kong faan</b> (four sets + a pair)   ·   tap for 16";
             if (menu == MenuMode.Pause && tables.Count > 0 && rules.HandSize != (sixteenTiles ? 16 : 13))
                 handText += "\n<size=" + Mathf.RoundToInt(textStyle.fontSize * 0.85f) + ">(starts with your next restart below)</size>";
             float hh = menu == MenuMode.Pause && tables.Count > 0 && rules.HandSize != (sixteenTiles ? 16 : 13) ? Unit * 3.6f : Unit * 2.4f;

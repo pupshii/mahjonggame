@@ -52,6 +52,15 @@ namespace MahjongNight.Core
         private readonly List<MatchEvent> events = new List<MatchEvent>();
         private int dealerPasses;
         private readonly int[] trickshot = { 1, 1, 1, 1 };
+        private int dealerWinStreak;   // wins in a row by the current dealer (Taiwanese dealer bonus)
+
+        /// <summary>
+        /// Taiwanese scoring: what the dealer gets on top if they win this hand — 1, then +2 for
+        /// each win in a row before it (1, 3, 5, 7…). 0 with Hong Kong scoring.
+        /// </summary>
+        public int DealerWinBonus => Rules.Scoring == ScoringStyle.Taiwanese
+            ? Rules.Taiwanese[TwHand.DealerWin] + Rules.Taiwanese.DealerStreakStep * dealerWinStreak
+            : 0;
 
         /// <summary>The biggest trickshot multiplier allowed.</summary>
         public const int MaxTrickshot = 3;
@@ -121,8 +130,10 @@ namespace MahjongNight.Core
                 {
                     int winner = result.Winners[i];
                     FaanResult score = FaanCalculator.Calculate(result.WinContexts[i], Rules);
-                    // Base (底, if the rules have one) plus faan; a standing trickshot stack multiplies the win.
-                    int faan = (Rules.WinBase + (score?.Total ?? 0)) * trickshot[winner];
+                    // Base (底, if the rules have one) plus faan (plus the dealer's bonus with Taiwanese
+                    // scoring); a standing trickshot stack multiplies the win.
+                    int dealerBonus = winner == Dealer ? DealerWinBonus : 0;
+                    int faan = (Rules.WinBase + (score?.Total ?? 0) + dealerBonus) * trickshot[winner];
                     if (result.SelfDrawn)
                     {
                         for (int s = 0; s < players.Length; s++)
@@ -274,8 +285,12 @@ namespace MahjongNight.Core
 
         private void FinishHand(bool dealerKeeps)
         {
+            if (Hand != null && Hand.Phase == HandPhase.Ended && Hand.Result.Outcome == HandOutcome.Win
+                && Hand.Result.Winners.Contains(Dealer))
+                dealerWinStreak++;
             if (!dealerKeeps)
             {
+                dealerWinStreak = 0;
                 Dealer = HandState.NextSeat(Dealer);
                 dealerPasses++;
             }

@@ -23,6 +23,8 @@ namespace MahjongNight.Core
         /// <summary>The best score for the hand, or null if it is not a complete winning shape.</summary>
         public static FaanResult Calculate(WinContext ctx, RuleSet rules)
         {
+            if (rules.Scoring == ScoringStyle.Taiwanese)
+                return TaiwaneseScorer.Calculate(ctx, rules);
             FaanResult best = null;
 
             void Consider(FaanResult r)
@@ -50,7 +52,9 @@ namespace MahjongNight.Core
                 return true;
             if (rules.AllowSevenPairs && melds.Count == 0 && IsSevenPairs(concealed))
                 return true;
-            return HandDecomposer.Decompose(concealed, melds, rules.HandSets).Count > 0;
+            if (HandDecomposer.Decompose(concealed, melds, rules.HandSets).Count > 0)
+                return true;
+            return rules.Scoring == ScoringStyle.Taiwanese && TaiwaneseScorer.IsSpecialShape(concealed, melds);
         }
 
         /// <summary>

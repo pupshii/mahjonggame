@@ -57,10 +57,17 @@ Touch controls switch on by themselves on a phone or tablet (to try them in the 
    **Hand size:** the button above the modes switches between **16-tile** mahjong (16 in hand,
    **five sets + a pair** to win — the default) and **13-tile** Hong Kong style (four sets + a
    pair). The choice is remembered; Seven Pairs / Thirteen Orphans only exist in 13-tile hands.
-   With 16 tiles there's **no minimum**: any complete hand wins (as in Taiwanese mahjong), and
-   every win pays **1 point base + the faan**. With 13 tiles you need 3 faan; the "Ready!" hint
-   shows what each waiting tile is worth, and tells you when a tile completes your hand but is
-   too cheap to win on.
+   **16 tiles uses HK-style Taiwanese scoring** (the sheet in `Docs/HK_Taiwanese_Mahjong_By_Difficulty.pdf`):
+   any complete hand wins, you **add up every hand that applies** (no cap), bigger versions
+   replace smaller ones (e.g. Concealed Self-Draw 5 instead of Fully Concealed 3 + Self-Drawn 1;
+   Small Three Dragons instead of the dragon pungs), and a win off a discard worth only 1 is a
+   **Chicken Hand (10)**. The dealer gets +1, then +3, +5, +7… for wins in a row. 嚦咕嚦咕 (7
+   pairs + a pung) and 十六不搭 (Sixteen Unrelated) count as winning hands. Not in yet (they need
+   game actions that don't exist): Declared Ready, Kong on Kong, Robbing Kong on Kong, Seven
+   Robs One, Flower Win and Thirteen Orphans. The "House" hands (Old & Young, Big Ping Wu) are 0
+   until you set them in `TaiwaneseTable`. With 13 tiles it's Hong Kong faan with a 3-faan
+   minimum; the "Ready!" hint shows what each waiting tile is worth, and tells you when a tile
+   completes your hand but is too cheap to win on.
    **Esc** pauses (everything freezes) and lets you restart on another difficulty. (Untick
    *Show Difficulty Menu* on the GreyboxGame component to skip the menu and use *Table Count*.)
    **Five tables:** you hold a seat at 5 tables at once, each with its own 3 bots and its own

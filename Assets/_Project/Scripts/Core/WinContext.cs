@@ -12,7 +12,7 @@ namespace MahjongNight.Core
         public Wind SeatWind { get; set; } = Wind.East;
         public Wind PrevailingWind { get; set; } = Wind.East;
 
-        /// <summary>Concealed tiles <b>including</b> the winning tile (14 − 3 × melds).</summary>
+        /// <summary>Concealed tiles <b>including</b> the winning tile (14 or 17, − 3 × melds).</summary>
         public IReadOnlyList<Tile> Concealed { get; set; } = new Tile[0];
         public IReadOnlyList<Meld> Melds { get; set; } = new Meld[0];
         /// <summary>Flowers and seasons.</summary>
@@ -25,6 +25,10 @@ namespace MahjongNight.Core
         public bool RobbedKong { get; set; }
         /// <summary>槓上開花 — self-drawn on a kong replacement tile.</summary>
         public bool KongReplacement { get; set; }
+        /// <summary>Self-drawn on the tile that replaced a flower or season.</summary>
+        public bool FlowerReplacement { get; set; }
+        /// <summary>How many tiles the winner had discarded before this win (for the "within N discards" hands).</summary>
+        public int DiscardsBeforeWin { get; set; }
         /// <summary>No drawable tiles were left when the hand was won.</summary>
         public bool LastTile { get; set; }
         /// <summary>天糊 — dealer wins with the starting hand.</summary>

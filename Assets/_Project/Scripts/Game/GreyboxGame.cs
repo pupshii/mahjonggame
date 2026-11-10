@@ -396,7 +396,9 @@ namespace MahjongNight.Game
                     FaanResult score = FaanCalculator.Calculate(result.WinContexts[i], rules);
                     resultLines.Add($"{DescribeWin(result, winner)} — {score.Total} faan" + (score.IsLimit ? " (LIMIT!)" : ""));
                     foreach (FaanItem item in score.Items)
-                        resultLines.Add($"    {item}   {FaanPatterns.ChineseName(item.Pattern)}");
+                        resultLines.Add($"    {item}   {item.Chinese}");
+                    if (winner == match.Dealer && match.DealerWinBonus > 0)
+                        resultLines.Add($"    Dealer win = +{match.DealerWinBonus}   莊家{(match.DealerWinBonus > rules.Taiwanese[TwHand.DealerWin] ? " (連莊)" : "")}");
                 }
             }
             AnnounceTrickshotWins(result);
