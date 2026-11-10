@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -53,31 +55,48 @@ namespace MahjongNight.EditorTools
                 target = BuildTarget.iOS,
                 options = BuildOptions.None,
             };
-            BuildReport report = BuildPipeline.BuildPlayer(options);
-            if (report.summary.result != BuildResult.Succeeded)
+            BuildReport report;
+            try
             {
-                EditorUtility.DisplayDialog("iOS build failed", $"The build {report.summary.result}. See the Console for the errors.", "OK");
+                report = BuildPipeline.BuildPlayer(options);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                EditorUtility.DisplayDialog("iOS build failed", ModuleHelp + "\n\n(" + e.Message + ")", "OK");
                 return;
             }
+            // Only call it built if the Xcode project is really there.
+            string xcodeProject = Path.Combine(IosFolder, "Unity-iPhone.xcodeproj");
+            if (report == null || report.summary.result != BuildResult.Succeeded || !Directory.Exists(xcodeProject))
+            {
+                string result = report == null ? "didn't run" : report.summary.result.ToString();
+                EditorUtility.DisplayDialog("iOS build failed",
+                    $"The build {result} and there's no {xcodeProject}.\n\n" +
+                    "If the Console says \"Build target 'iOS' not supported\": " + ModuleHelp, "OK");
+                return;
+            }
+            Debug.Log("Xcode project: " + Path.GetFullPath(xcodeProject));
             EditorUtility.RevealInFinder(IosFolder);
             EditorUtility.DisplayDialog("Xcode project built",
-                $"Built into {IosFolder} (it just opened in Finder).\n\n" +
+                $"Built: {Path.GetFullPath(xcodeProject)}\n\n" +
                 "1. Open Unity-iPhone.xcodeproj in Xcode.\n" +
                 "2. Click Unity-iPhone (top of the left list) → Signing & Capabilities → Team: pick your Apple ID " +
                 "(Xcode → Settings → Accounts to add it).\n" +
                 "3. Plug in your iPhone, pick it at the top of Xcode, press ▶ Run.\n" +
-                "4. First time only, on the phone: Settings → General → VPN & Device Management → trust your Apple ID; " +
-                "and Settings → Privacy & Security → Developer Mode → on.\n\n" +
-                "With a free Apple ID the app stops opening after 7 days — just Run it from Xcode again.", "OK");
+                "4. First time, on the phone: Developer Mode on, and trust your Apple ID.", "OK");
         }
+
+        private static string ModuleHelp =>
+            $"the iOS module isn't loaded. Quit Unity, open Unity Hub → Installs → {Application.unityVersion} " +
+            "(this exact version) → ⚙ → Add modules → tick \"iOS Build Support\" → Install. Then reopen the project " +
+            "(a restart is needed after installing a module) and run this again.";
 
         private static bool CheckReady()
         {
             if (!IosModuleInstalled)
             {
-                EditorUtility.DisplayDialog("iOS Build Support isn't installed",
-                    "Close Unity, open Unity Hub → Installs → your Unity 6 version → ⚙ → Add modules → tick " +
-                    "\"iOS Build Support\" → Install. Then reopen the project and run this again.", "OK");
+                EditorUtility.DisplayDialog("iOS Build Support isn't installed", "It looks like " + ModuleHelp, "OK");
                 return false;
             }
             if (AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath) == null)
