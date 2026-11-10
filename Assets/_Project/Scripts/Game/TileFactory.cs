@@ -36,12 +36,27 @@ namespace MahjongNight.Game
         }
 
         /// <summary>A lit material that works in the built-in pipeline or URP.</summary>
+        private static Shader litShader;
+
+        /// <summary>
+        /// A plain coloured material. Device builds only contain shaders something references, so
+        /// fall back through shaders that are always in a build ("Legacy Shaders/Diffuse" is on
+        /// the default Always Included list) rather than crash on a missing one.
+        /// </summary>
         public static Material CreateMaterial(Color color)
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-                shader = Shader.Find("Standard");
-            var material = new Material(shader);
+            if (litShader == null)
+            {
+                foreach (string name in new[] { "Universal Render Pipeline/Lit", "Standard", "Legacy Shaders/Diffuse", "Unlit/Color", "Sprites/Default" })
+                {
+                    litShader = Shader.Find(name);
+                    if (litShader != null)
+                        break;
+                }
+                if (litShader == null)
+                    Debug.LogError("No usable shader found for greybox materials.");
+            }
+            var material = new Material(litShader);
             material.color = color;
             return material;
         }

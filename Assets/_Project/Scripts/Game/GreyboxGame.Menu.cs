@@ -26,6 +26,7 @@ namespace MahjongNight.Game
         private MenuMode menu = MenuMode.None;
         private Difficulty? difficulty;          // null: started from the inspector's Table Count
         private Difficulty? pendingDifficulty;   // chosen in the menu; applied on the next Update
+        private string startError;               // why the last start failed, shown on the menu
 
         private static readonly Difficulty[] Difficulties = { Difficulty.Easy, Difficulty.Medium, Difficulty.Hard, Difficulty.Mahjong };
 
@@ -98,7 +99,19 @@ namespace MahjongNight.Game
             {
                 Difficulty d = pendingDifficulty.Value;
                 pendingDifficulty = null;
-                StartStage(d);
+                try
+                {
+                    startError = null;
+                    StartStage(d);
+                }
+                catch (System.Exception e)
+                {
+                    // Show it on the menu (on a phone there's no Console to look at).
+                    Debug.LogException(e);
+                    startError = e.GetType().Name + ": " + e.Message;
+                    menu = MenuMode.Start;
+                    Time.timeScale = 1f;
+                }
                 return true;
             }
             if (KeyDown(KeyCode.Escape) && tables.Count > 0)
@@ -187,6 +200,13 @@ namespace MahjongNight.Game
                 y += Unit * 4f + 8;
             }
 
+            if (startError != null)
+            {
+                var err = new GUIStyle(textStyle) { wordWrap = true, alignment = TextAnchor.UpperCenter };
+                err.normal.textColor = new Color(1f, 0.45f, 0.4f);
+                GUI.Label(new Rect(x, y, w, LineHeight * 3f), "Couldn't start: " + startError, err);
+                y += LineHeight * 3f;
+            }
             if (menu == MenuMode.Start)
             {
                 y += LineHeight * 0.5f;

@@ -92,6 +92,31 @@ namespace MahjongNight.EditorTools
             "(this exact version) → ⚙ → Add modules → tick \"iOS Build Support\" → Install. Then reopen the project " +
             "(a restart is needed after installing a module) and run this again.";
 
+        /// <summary>Adds shaders to Project Settings → Graphics → Always Included Shaders.</summary>
+        private static void AlwaysInclude(params string[] shaderNames)
+        {
+            UnityEngine.Object[] assets = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/GraphicsSettings.asset");
+            if (assets == null || assets.Length == 0)
+                return;
+            var settings = new SerializedObject(assets[0]);
+            SerializedProperty list = settings.FindProperty("m_AlwaysIncludedShaders");
+            foreach (string name in shaderNames)
+            {
+                Shader shader = Shader.Find(name);
+                if (shader == null)
+                    continue;
+                bool present = false;
+                for (int i = 0; i < list.arraySize; i++)
+                    if (list.GetArrayElementAtIndex(i).objectReferenceValue == shader)
+                        present = true;
+                if (present)
+                    continue;
+                list.InsertArrayElementAtIndex(list.arraySize);
+                list.GetArrayElementAtIndex(list.arraySize - 1).objectReferenceValue = shader;
+            }
+            settings.ApplyModifiedProperties();
+        }
+
         private static bool CheckReady()
         {
             if (!IosModuleInstalled)
@@ -124,6 +149,12 @@ namespace MahjongNight.EditorTools
             PlayerSettings.allowedAutorotateToLandscapeLeft = true;
             PlayerSettings.allowedAutorotateToLandscapeRight = true;
             PlayerSettings.statusBarHidden = true;
+
+            // The game builds everything in code at runtime (primitives, colliders, text, audio,
+            // materials by shader name) — don't let the build strip what it can't see being used.
+            PlayerSettings.stripEngineCode = false;
+            PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.iOS, ManagedStrippingLevel.Minimal);
+            AlwaysInclude("Standard", "Legacy Shaders/Diffuse", "GUI/Text Shader", "Unlit/Color");
 
             PlayerSettings.iOS.targetOSVersionString = "15.0";
             PlayerSettings.iOS.appleEnableAutomaticSigning = true;
