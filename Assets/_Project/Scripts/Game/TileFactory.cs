@@ -41,13 +41,17 @@ namespace MahjongNight.Game
         /// <summary>
         /// A plain coloured material. Device builds only contain shaders something references, so
         /// fall back through shaders that are always in a build ("Legacy Shaders/Diffuse" is on
-        /// the default Always Included list) rather than crash on a missing one.
+        /// the default Always Included list) rather than crash on a missing one. Phones use that
+        /// lightweight shader from the start (Standard is heavy and isn't in the build).
         /// </summary>
         public static Material CreateMaterial(Color color)
         {
             if (litShader == null)
             {
-                foreach (string name in new[] { "Universal Render Pipeline/Lit", "Standard", "Legacy Shaders/Diffuse", "Unlit/Color", "Sprites/Default" })
+                string[] names = Application.isMobilePlatform
+                    ? new[] { "Legacy Shaders/Diffuse", "Unlit/Color", "Sprites/Default" }
+                    : new[] { "Universal Render Pipeline/Lit", "Standard", "Legacy Shaders/Diffuse", "Unlit/Color", "Sprites/Default" };
+                foreach (string name in names)
                 {
                     litShader = Shader.Find(name);
                     if (litShader != null)
