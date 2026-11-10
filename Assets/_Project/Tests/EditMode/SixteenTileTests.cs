@@ -95,6 +95,41 @@ namespace MahjongNight.Core.Tests
         }
 
         [Test]
+        public void WinBase_IsPaidOnTopOfTheFaan()
+        {
+            bool sawWin = false;
+            for (ulong seed = 1; seed < 60 && !sawWin; seed++)
+            {
+                RuleSet plainRules = Sixteen();
+                RuleSet baseRules = Sixteen();
+                baseRules.WinBase = 2;
+                var plain = new ScoreMatch(plainRules, MatchRules.Default(), seed);
+                var based = new ScoreMatch(baseRules, MatchRules.Default(), seed);
+                plain.StartHand();
+                based.StartHand();
+                foreach (ScoreMatch m in new[] { plain, based })
+                {
+                    var bots = Enumerable.Range(0, 4).Select(s => new SimpleBot(seed * 13 + (ulong)s)).ToArray();
+                    while (m.Hand.Phase != HandPhase.Ended)
+                    {
+                        int seat = m.Hand.SeatToAct();
+                        m.Hand.Apply(bots[seat].Choose(m.Hand, seat, m.Hand.GetLegalActions(seat)));
+                    }
+                }
+                if (plain.Hand.Result.Outcome != HandOutcome.Win || plain.Hand.Result.SelfDrawn)
+                    continue;
+                sawWin = true;
+                int winner = plain.Hand.Result.Winners[0];
+                int before = plain.Players[winner].Score;
+                plain.ResolveHand();
+                based.ResolveHand();
+                Assert.That(based.Players[winner].Score - before, Is.EqualTo(plain.Players[winner].Score - before + 2),
+                    "The discarder pays the base on top");
+            }
+            Assert.That(sawWin, Is.True);
+        }
+
+        [Test]
         public void Bots_PlayFullMatches_With16Tiles()
         {
             RuleSet rules = Sixteen(RuleSet.Party());

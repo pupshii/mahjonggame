@@ -21,6 +21,12 @@ namespace MahjongNight.Core
         /// <summary>A hand must be worth at least this many faan to be declared a win (起糊番數).</summary>
         public int MinFaan { get; set; }
 
+        /// <summary>
+        /// Paid on every win on top of the faan (底, as in Taiwanese base + tai scoring), so even a
+        /// 0-faan hand is worth something when <see cref="MinFaan"/> is 0. 0 = faan only.
+        /// </summary>
+        public int WinBase { get; set; }
+
         /// <summary>Faan cap (爆棚); limit hands score exactly this.</summary>
         public int MaxFaan { get; set; } = 13;
 

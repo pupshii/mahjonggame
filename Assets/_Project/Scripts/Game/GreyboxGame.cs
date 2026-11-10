@@ -1284,7 +1284,7 @@ namespace MahjongNight.Game
             if (legal.Count > 0 && HumanTimeLimitHere() > 0f)
                 message += $"   ({SecondsLeft()}s)";
 
-            string hint = ReadyHint();
+            string hint = TooCheapToWinHint(legal) ?? ReadyHint();
             List<string> labels = buttons.Select(Describe).ToList();
             List<System.Action> actions = buttons.Select(a => (System.Action)(() => Apply(a))).ToList();
             var lines = new List<string> { message };
@@ -1313,17 +1313,86 @@ namespace MahjongNight.Game
 
         private const float AwayClaimSeconds = 6f;
 
-        /// <summary>Newbie hint: which tiles would complete the hand (only between turns).</summary>
+        private int readyHintKey = -1;
+        private string readyHintText;
+
+        /// <summary>
+        /// Newbie hint (between turns): which tiles would complete the hand and what each is worth
+        /// (self-drawn) — and if none of them reaches the table minimum, says so, because then the
+        /// game won't let you win on them. Worked out once per change to the hand.
+        /// </summary>
         private string ReadyHint()
         {
             SeatState me = Hand.Seats[HumanSeat];
             if (me.Concealed.Count + 3 * me.Melds.Count != rules.HandSize)
                 return null;
+            int key = Hand.Events.Count * 31 + me.Concealed.Count;
+            if (key != readyHintKey)
+            {
+                readyHintKey = key;
+                readyHintText = BuildReadyHint(me);
+            }
+            if (readyHintText == null)
+                return null;
+            string trick = TrickshotHint();
+            return readyHintText + (trick != null ? "   ·   " + trick : "");
+        }
+
+        private string BuildReadyHint(SeatState me)
+        {
             List<Tile> waits = FaanCalculator.GetWaits(me.Concealed, me.Melds, rules);
             if (waits.Count == 0)
                 return null;
-            string trick = TrickshotHint();
-            return "Ready! Waiting on: " + string.Join(" ", waits) + (trick != null ? "   ·   " + trick : "");
+            var parts = new List<string>();
+            bool anyWins = false;
+            foreach (Tile w in waits)
+            {
+                int faan = SelfDrawnFaan(me, w);
+                bool enough = faan >= rules.MinFaan;
+                anyWins |= enough;
+                parts.Add(enough ? $"{w} ({faan} faan)" : $"<color=#999>{w} ({faan})</color>");
+            }
+            string text = "Ready! Waiting on: " + string.Join("  ", parts);
+            if (!anyWins)
+                text += $"   <color=#ff9060>— too cheap to win yet (need {rules.MinFaan} faan)</color>";
+            return text;
+        }
+
+        /// <summary>Faan if <paramref name="w"/> completed the hand by self-draw (-1 if it doesn't score).</summary>
+        private int SelfDrawnFaan(SeatState me, Tile w)
+        {
+            var concealed = new List<Tile>(me.Concealed) { w };
+            var ctx = new WinContext
+            {
+                Seat = me.Seat,
+                SeatWind = me.SeatWind,
+                PrevailingWind = Hand.PrevailingWind,
+                Melds = me.Melds,
+                Bonus = me.Bonus,
+                Concealed = concealed,
+                WinningTile = w,
+                SelfDrawn = true,
+            };
+            FaanResult r = FaanCalculator.Calculate(ctx, rules);
+            return r == null ? -1 : r.IsLimit ? rules.MaxFaan : r.Total;
+        }
+
+        /// <summary>
+        /// Your turn, and the tile you drew completes your hand — but it's below the table
+        /// minimum, so there's no Win button. Explain instead of silently asking for a discard.
+        /// </summary>
+        private string TooCheapToWinHint(List<PlayerAction> legal)
+        {
+            if (Hand.Phase != HandPhase.AwaitingAction || Hand.CurrentSeat != HumanSeat
+                || legal.Any(a => a.Type == ActionType.SelfDrawnWin) || !Hand.LastDrawnTile.HasValue)
+                return null;
+            SeatState me = Hand.Seats[HumanSeat];
+            if (!FaanCalculator.IsCompleteShape(me.Concealed, me.Melds, rules))
+                return null;
+            WinContext ctx = Hand.PreviewWin(HumanSeat);
+            FaanResult r = ctx != null ? FaanCalculator.Calculate(ctx, rules) : null;
+            int faan = r == null ? 0 : r.Total;
+            return $"<color=#ff9060>{Hand.LastDrawnTile.Value} completes your hand, but it's only {faan} faan — you need {rules.MinFaan} to win. Discard and keep going.</color>";
         }
 
         private string Describe(PlayerAction a)

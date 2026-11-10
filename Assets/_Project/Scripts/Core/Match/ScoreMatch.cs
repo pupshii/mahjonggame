@@ -121,7 +121,8 @@ namespace MahjongNight.Core
                 {
                     int winner = result.Winners[i];
                     FaanResult score = FaanCalculator.Calculate(result.WinContexts[i], Rules);
-                    int faan = (score?.Total ?? 0) * trickshot[winner];   // a standing trickshot stack multiplies the win
+                    // Base (底, if the rules have one) plus faan; a standing trickshot stack multiplies the win.
+                    int faan = (Rules.WinBase + (score?.Total ?? 0)) * trickshot[winner];
                     if (result.SelfDrawn)
                     {
                         for (int s = 0; s < players.Length; s++)

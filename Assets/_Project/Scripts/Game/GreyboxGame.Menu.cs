@@ -78,6 +78,12 @@ namespace MahjongNight.Game
             rules = PureMahjong || classicRules ? RuleSet.Classic() : RuleSet.Party();
             rules.ChooseDraws = chooseDraws && !PureMahjong;
             rules.HandSets = sixteenTiles ? 5 : 4;   // 16-tile hands (five sets + a pair) or 13 (four sets)
+            if (sixteenTiles)
+            {
+                // As in Taiwanese mahjong: any complete hand wins, and every win pays a base on top.
+                rules.MinFaan = 0;
+                rules.WinBase = 1;
+            }
             TearDownStage();
             BuildTables();
             headLook = new HeadLook(cam, avatars[HumanSeat].EyePosition, ctx.Origin);
