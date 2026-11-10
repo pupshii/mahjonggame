@@ -4,7 +4,7 @@
   the game's own assemblies. Without this, device builds can fail when a stage starts.
 -->
 <linker>
-  <assembly fullname="MahjongNight.Core" preserve="all" />
+  <assembly fullname="MahjongCore" preserve="all" />
   <assembly fullname="MahjongNight.Game" preserve="all" />
   <assembly fullname="UnityEngine.PhysicsModule" preserve="all" />
   <assembly fullname="UnityEngine.TextRenderingModule" preserve="all" />
