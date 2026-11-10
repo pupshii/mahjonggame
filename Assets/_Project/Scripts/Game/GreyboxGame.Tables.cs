@@ -149,7 +149,8 @@ namespace MahjongNight.Game
         /// <summary>Everything one table does in a frame (bots, cheats, spotting, turns, labels).</summary>
         private void UpdateTable(float now, float dt)
         {
-            UpdateBotPhones(now);
+            if (!PureMahjong)
+                UpdateBotPhones(now);
             if (Shuffling)
                 UpdateShuffle(now, dt);
 
@@ -165,10 +166,10 @@ namespace MahjongNight.Game
             {
                 UpdateBotGaze(now);
                 UpdateCheats(now);
-                if (HandLive) UpdateBotCheating(now);
-                if (HandLive) UpdateSpotting(now, dt);
+                if (HandLive && !PureMahjong) UpdateBotCheating(now);
+                if (HandLive && !PureMahjong) UpdateSpotting(now, dt);
                 if (HandLive) UpdateTurns(now);
-                if (HandLive) UpdateBotTrickshots(now);
+                if (HandLive && !PureMahjong) UpdateBotTrickshots(now);
             }
             else if (match.Phase == MatchPhase.BetweenHands && ctx.AutoNextHandAt > 0f && now >= ctx.AutoNextHandAt)
             {
@@ -268,7 +269,8 @@ namespace MahjongNight.Game
                 }
                 else
                 {
-                    label.text = $"{title}\n{(claim ? "CLAIM?" : "YOUR TURN")}  {secs}s";
+                    label.text = $"{title}\n{(claim ? "CLAIM?" : "YOUR TURN")}" + (HumanTimeLimitHere() > 0f ? $"  {secs}s" : "");
+                    if (HumanTimeLimitHere() <= 0f) secs = 99;   // no clock: never turns red
                     label.color = secs <= 5 ? new Color(1f, 0.25f, 0.2f) : secs <= 10 ? new Color(1f, 0.75f, 0.2f) : new Color(1f, 1f, 0.6f);
                 }
             }

@@ -38,7 +38,7 @@ namespace MahjongNight.Game
 
         private void UpdateHome(float now, float dt)
         {
-            if (humanAlive)
+            if (humanAlive && !PureMahjong)
                 dog.Tick(dt);
             if (home.Dog.Tick(dt, dog, cam.transform.position, atHome))
             {

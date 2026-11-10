@@ -188,7 +188,7 @@ namespace MahjongNight.Game
             resultLines = new List<string>();
             paymentLines.Clear();
             FlushMatchEvents();
-            if (ctx == Seated)
+            if (ctx == Seated && !PureMahjong)
                 AddLog($"Your pocket: {string.Join(" ", match.Players[HumanSeat].Pocket)}");
             OnHandChanged();
             BeginShuffle();   // the hand is dealt, but first everyone washes the tiles
@@ -219,7 +219,8 @@ namespace MahjongNight.Game
             ctx = Seated;
             if (stageStopped)                    // you just died
                 return;
-            UpdateCooking(now, dt);              // the kitchen and customers' orders
+            if (!PureMahjong)
+                UpdateCooking(now, dt);          // the kitchen and customers' orders
             ctx = Seated;
             if (!standing)
                 UpdateHumanHead(dt);
@@ -648,7 +649,7 @@ namespace MahjongNight.Game
 
         private void HumanCallOut(int target)
         {
-            if (target < 0 || !HandLive || Time.time < callOutCooldownUntil)
+            if (target < 0 || !HandLive || Time.time < callOutCooldownUntil || PureMahjong)
                 return;
             if (cheats[target] != null && cheats[target].Exposed(Time.time))
             {
@@ -664,7 +665,7 @@ namespace MahjongNight.Game
         /// <summary>Bots spend spare faan on upgrades between hands.</summary>
         private void BotsShop()
         {
-            if (match.Phase != MatchPhase.BetweenHands)
+            if (match.Phase != MatchPhase.BetweenHands || PureMahjong)
                 return;
             for (int s = 0; s < HandState.SeatCount; s++)
             {
@@ -869,7 +870,7 @@ namespace MahjongNight.Game
             else if (HandLive)
             {
                 bool seatedAndFree = humanAlive && !OnPhone(HumanSeat);
-                bool cheatUi = seatedAndFree && (headLook.LookingDown || (cheats[HumanSeat] != null && cheats[HumanSeat].InProgress));
+                bool cheatUi = seatedAndFree && !PureMahjong && (headLook.LookingDown || (cheats[HumanSeat] != null && cheats[HumanSeat].InProgress));
                 if (cheatUi)
                     DrawCheatStrip();
                 else if (seatedAndFree || !humanAlive)
@@ -878,7 +879,7 @@ namespace MahjongNight.Game
                     DrawPicker();
                 if (headLook.InTableView)
                     DrawTableViewHint();
-                else if (!headLook.LookingDown && seatedAndFree)
+                else if (!headLook.LookingDown && seatedAndFree && !PureMahjong)
                     DrawLookHint();
             }
             else if (Shuffling)
@@ -988,15 +989,22 @@ namespace MahjongNight.Game
             {
                 (difficulty.HasValue ? $"{DifficultyName(difficulty.Value)} · " : "") +
                 (tables.Count > 1 ? $"Table {ctx.Index + 1}/{tables.Count} · " : "") +
-                $"Hand {match.HandNumber}/{matchRules.HandsPerMatch} · {(classicRules ? "Classic" : "Party")} · {match.PrevailingWind} round · Wall {Hand.Wall.DrawableCount}",
+                $"Hand {match.HandNumber}/{matchRules.HandsPerMatch} · {(PureMahjong || classicRules ? "Classic" : "Party")} · {match.PrevailingWind} round · Wall {Hand.Wall.DrawableCount}",
                 HandLive ? $"Turn: {SeatName(Hand.CurrentSeat)}" : Shuffling ? "Shuffling the tiles…" : "Hand over",
                 ScoresLine(),
-                "Your upgrades: " + string.Join(" · ", Upgrades.All.Select(u => $"{Upgrades.Name(u)} {me.Level(u)}")),
-                NeedsLine(),
-                PhoneStatusLine(),
-                DogStatusLine(),
-                "<color=#aaa>Right-click/Tab: table view · Scroll: zoom · F: stand up / sit · P: phone · Esc: menu</color>",
             };
+            if (PureMahjong)
+            {
+                lines.Add("<color=#aaa>Right-click/Tab: table view · Scroll: zoom · Esc: menu</color>");
+            }
+            else
+            {
+                lines.Add("Your upgrades: " + string.Join(" · ", Upgrades.All.Select(u => $"{Upgrades.Name(u)} {me.Level(u)}")));
+                lines.Add(NeedsLine());
+                lines.Add(PhoneStatusLine());
+                lines.Add(DogStatusLine());
+                lines.Add("<color=#aaa>Right-click/Tab: table view · Scroll: zoom · F: stand up / sit · P: phone · Esc: menu</color>");
+            }
 
             float w = Mathf.Min(Screen.width * 0.45f, lines.Max(l => TextWidth(textStyle, l)) + Pad * 2 + 8);
             int logCount = Mathf.Min(StatusLogLines, log.Count);
@@ -1239,7 +1247,7 @@ namespace MahjongNight.Game
                 message = $"{SeatName(Hand.CurrentSeat)} is adding to a kong";
             else
                 message = $"{SeatName(Hand.LastDiscardSeat)} discarded {Hand.LastDiscard}";
-            if (legal.Count > 0 && humanTimeLimit > 0f)
+            if (legal.Count > 0 && HumanTimeLimitHere() > 0f)
                 message += $"   ({SecondsLeft()}s)";
 
             string hint = ReadyHint();
@@ -1260,6 +1268,8 @@ namespace MahjongNight.Game
         /// </summary>
         private float HumanTimeLimitHere()
         {
+            if (PureMahjong)
+                return 0f;                         // no clock: take your time
             return AwayClaim ? Mathf.Min(AwayClaimSeconds, humanTimeLimit) : humanTimeLimit;
         }
 
@@ -1449,8 +1459,9 @@ namespace MahjongNight.Game
             else
             {
                 MatchPlayer me = match.Players[HumanSeat];
-                lines.Add($"Upgrade shop — you have {me.Score} faan:");
-                foreach (Upgrade u in Upgrades.All)
+                if (!PureMahjong)
+                    lines.Add($"Upgrade shop — you have {me.Score} faan:");
+                foreach (Upgrade u in PureMahjong ? new Upgrade[0] : Upgrades.All)
                 {
                     int level = me.Level(u);
                     bool canBuy = match.CanBuy(HumanSeat, u, out int cost);

@@ -1,3 +1,4 @@
+using MahjongNight.Core;
 using UnityEngine;
 
 namespace MahjongNight.Game
@@ -7,6 +8,7 @@ namespace MahjongNight.Game
         Easy,    // 1 table
         Medium,  // 3 tables
         Hard,    // 5 tables
+        Mahjong, // 1 table, just mahjong: no cheating, phones, standing up, customers or dog
     }
 
     /// <summary>
@@ -25,9 +27,16 @@ namespace MahjongNight.Game
         private Difficulty? difficulty;          // null: started from the inspector's Table Count
         private Difficulty? pendingDifficulty;   // chosen in the menu; applied on the next Update
 
-        private static readonly Difficulty[] Difficulties = { Difficulty.Easy, Difficulty.Medium, Difficulty.Hard };
+        private static readonly Difficulty[] Difficulties = { Difficulty.Easy, Difficulty.Medium, Difficulty.Hard, Difficulty.Mahjong };
 
-        public static int TablesFor(Difficulty d) => d == Difficulty.Easy ? 1 : d == Difficulty.Medium ? 3 : 5;
+        public static int TablesFor(Difficulty d) => d == Difficulty.Easy || d == Difficulty.Mahjong ? 1 : d == Difficulty.Medium ? 3 : 5;
+
+        /// <summary>
+        /// Mahjong mode: one table of plain Hong Kong mahjong (classic rules) — no cheating or
+        /// call-outs, no phones or texts, no standing up, no hunger/thirst/bladder, no customers,
+        /// no trickshots, no upgrade shop and no turn clock.
+        /// </summary>
+        private bool PureMahjong => difficulty == Difficulty.Mahjong;
 
         private static string DifficultyName(Difficulty d) => d.ToString();
 
@@ -37,7 +46,8 @@ namespace MahjongNight.Game
             {
                 case Difficulty.Easy: return "1 table, 3 customers. Learn the ropes.";
                 case Difficulty.Medium: return "3 tables, 9 customers. Start running.";
-                default: return "5 tables, 15 customers. Pure chaos.";
+                case Difficulty.Hard: return "5 tables, 15 customers. Pure chaos.";
+                default: return "Just mahjong: one table, classic rules. No cheating, phones, standing up or customers.";
             }
         }
 
@@ -47,6 +57,8 @@ namespace MahjongNight.Game
             if (d.HasValue)
                 tableCount = TablesFor(d.Value);
             difficulty = d;
+            rules = PureMahjong || classicRules ? RuleSet.Classic() : RuleSet.Party();
+            rules.ChooseDraws = chooseDraws && !PureMahjong;
             TearDownStage();
             BuildTables();
             headLook = new HeadLook(cam, avatars[HumanSeat].EyePosition, ctx.Origin);
@@ -120,7 +132,8 @@ namespace MahjongNight.Game
             Event e = Event.current;
             if (e.type == EventType.KeyDown)
             {
-                int pick = e.keyCode == KeyCode.Alpha1 ? 0 : e.keyCode == KeyCode.Alpha2 ? 1 : e.keyCode == KeyCode.Alpha3 ? 2 : -1;
+                int pick = e.keyCode == KeyCode.Alpha1 ? 0 : e.keyCode == KeyCode.Alpha2 ? 1 : e.keyCode == KeyCode.Alpha3 ? 2
+                    : e.keyCode == KeyCode.Alpha4 ? 3 : -1;
                 if (pick >= 0)
                 {
                     pendingDifficulty = Difficulties[pick];
@@ -163,7 +176,8 @@ namespace MahjongNight.Game
             {
                 Difficulty d = Difficulties[i];
                 bool current = menu == MenuMode.Pause && difficulty == d;
-                string text = $"<b>{i + 1}.  {DifficultyName(d)} — {TablesFor(d)} table{(TablesFor(d) == 1 ? "" : "s")}</b>{(current ? "   (current)" : "")}\n" +
+                string heading = d == Difficulty.Mahjong ? "Mahjong — no distractions" : $"{DifficultyName(d)} — {TablesFor(d)} table{(TablesFor(d) == 1 ? "" : "s")}";
+                string text = $"<b>{i + 1}.  {heading}</b>{(current ? "   (current)" : "")}\n" +
                               $"<size={Mathf.RoundToInt(textStyle.fontSize * 0.85f)}>{DifficultyBlurb(d)}</size>";
                 if (GUI.Button(new Rect(x, y, w, Unit * 4f), text, buttonStyle))
                 {
@@ -176,7 +190,7 @@ namespace MahjongNight.Game
             if (menu == MenuMode.Start)
             {
                 y += LineHeight * 0.5f;
-                GUI.Label(new Rect(x, y, w, LineHeight), "<color=#aaa>Press 1, 2 or 3 · Esc pauses during the game</color>", centerStyle);
+                GUI.Label(new Rect(x, y, w, LineHeight), "<color=#aaa>Press 1, 2, 3 or 4 · Esc pauses during the game</color>", centerStyle);
             }
         }
     }

@@ -55,7 +55,7 @@ namespace MahjongNight.Game
             UpdateHumanPhone(now);
             UpdateDrums(dt);
             UpdateMiniGame(dt);
-            if (!standing && humanAlive && Input.GetKeyDown(KeyCode.T))
+            if (!standing && humanAlive && !PureMahjong && Input.GetKeyDown(KeyCode.T))
                 TryHumanTrickshot();
 
             // Standing captures the mouse for looking around — but release it whenever there's
@@ -71,7 +71,8 @@ namespace MahjongNight.Game
             {
                 bool canMove = standing && !using_.HasValue && !OnPhone(HumanSeat) && !needsCursor;
                 Exertion exertion = standing ? walker.Tick(dt, canMove) : Exertion.Resting;
-                needs.Tick(dt, exertion);
+                if (!PureMahjong)
+                    needs.Tick(dt, exertion);       // no bars to worry about in Mahjong mode
                 if (needs.IsDead)
                 {
                     Die(needs.CauseOfDeath.Value);
@@ -94,7 +95,7 @@ namespace MahjongNight.Game
                 if (Input.GetKeyDown(KeyCode.F) && chair >= 0 && !using_.HasValue && !InMiniGame)
                     SitDown(chair);
             }
-            else if (humanAlive && Input.GetKeyDown(KeyCode.F) && !OnPhone(HumanSeat)
+            else if (humanAlive && !PureMahjong && Input.GetKeyDown(KeyCode.F) && !OnPhone(HumanSeat)
                      && (cheats[HumanSeat] == null || !cheats[HumanSeat].InProgress))
             {
                 StandUp();

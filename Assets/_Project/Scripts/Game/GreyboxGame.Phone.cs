@@ -103,7 +103,7 @@ namespace MahjongNight.Game
             {
                 // How often Latte messages you depends on how hungry they are (see GreyboxGame.Home).
                 ScheduleDogMessages(now);
-                if (now >= humanNextDogText && dog.MessageGap != null && !atHome)
+                if (now >= humanNextDogText && dog.MessageGap != null && !atHome && !PureMahjong)
                     StartLatteMessage(now);
             }
 
@@ -124,7 +124,7 @@ namespace MahjongNight.Game
 
             // P: the phone and its apps. 1-3 quick-call a player at your table — except inside an
             // app where the number keys pick things (songs, apps).
-            if (humanAlive)
+            if (humanAlive && !PureMahjong)
             {
                 if (Input.GetKeyDown(KeyCode.P))
                     TogglePhone();

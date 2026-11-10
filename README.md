@@ -25,7 +25,11 @@ git clone https://github.com/pupshii/mahjonggame.git
 ## Playing the greybox
 1. Menu bar → **Mahjong Night → Create Greybox Scene** (first time only; commit the scene).
    Later: **Mahjong Night → Open Greybox Scene**. Press **Play** and pick a difficulty:
-   **Easy** (1 table), **Medium** (3 tables) or **Hard** (5 tables) — click, or press 1/2/3.
+   **Easy** (1 table), **Medium** (3 tables) or **Hard** (5 tables) — click, or press 1/2/3 —
+   or **Mahjong** (press 4): one table of plain Hong Kong mahjong with classic rules and none of
+   the party stuff — no cheating or call-outs, no phone or texts, no standing up, no hunger /
+   thirst / pee, no customers, no trickshots, no upgrade shop and no turn clock. (The tiles are
+   still shuffled by hand before each hand.)
    **Esc** pauses (everything freezes) and lets you restart on another difficulty. (Untick
    *Show Difficulty Menu* on the GreyboxGame component to skip the menu and use *Table Count*.)
    **Five tables:** you hold a seat at 5 tables at once, each with its own 3 bots and its own
